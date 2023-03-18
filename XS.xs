@@ -126,7 +126,7 @@ typedef struct {
   int incr_nest;   // {[]}-nesting level
   unsigned char incr_mode;
 
-  Simdjson_wrapper simdjson;
+  simdjson_parser_t simdjson;
 
   SV *v_false, *v_true;
 } JSON;
@@ -1787,18 +1787,26 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   else
     sv_utf8_upgrade (string);
 
-  if (json->flags & F_USE_SIMDJSON) {
-    SV *my_true, *my_false; 
-    if (expect_false (!json->v_true))
-      my_true = GET_BOOL (true);
-    else
-      my_true = json->v_true;
-    if (expect_false (!json->v_false))
-      my_false = GET_BOOL (false);
-    else
-      my_false = json->v_false;
+  SvGROW (string, SvCUR (string) + 1); // should basically be a NOP
 
-    sv = simdjson_decode(json->simdjson, string, my_true, my_false);
+  if (json->flags & F_USE_SIMDJSON) {
+    simdjson_decode_t sj_dec = {0};
+    sj_dec.parser = json->simdjson;
+    sj_dec.input = string;
+ 
+    if (expect_false (!json->v_true))
+      sj_dec.v_true = GET_BOOL (true);
+    else
+      sj_dec.v_true = json->v_true;
+    if (expect_false (!json->v_false))
+      sj_dec.v_false = GET_BOOL (false);
+    else
+      sj_dec.v_false = json->v_false;
+
+    sv = simdjson_decode(&sj_dec);
+    if (sv == NULL) {
+      croak("FIXME dying");
+    }
     sv = sv_2mortal (sv);
 
     if (!(dec.json.flags & F_ALLOW_NONREF) && json_nonref (sv))
@@ -1806,8 +1814,6 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
 
     return sv;
   }
-
-  SvGROW (string, SvCUR (string) + 1); // should basically be a NOP
 
   dec.json  = *json;
   dec.cur   = SvPVX (string);

@@ -4,17 +4,34 @@
 
 using namespace simdjson; // optional
 
-static SV* recursive_parse_json(ondemand::value element, SV* v_true, SV* v_false) {
+static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element) {
   SV* res = NULL;
 
-  switch (element.type()) {
+  ondemand::json_type t;
+  auto err = element.type().get(t);
+  if (err) {
+    dec->error_code = err;
+    return NULL;
+  }
+
+  switch (t) {
   case ondemand::json_type::array: 
     {
       AV *av = newAV();
 
       for (auto child : element.get_array()) {
-        SV *elem = recursive_parse_json(child.value(), v_true, v_false);
-        // FIXME error
+        ondemand::value val;
+        auto err = child.get(val);
+        if (err) {
+          dec->error_code = err;
+          SvREFCNT_dec (av);
+          return NULL;
+        }
+        SV *elem = recursive_parse_json(dec, val);
+        if (!elem) {
+          SvREFCNT_dec (av);
+          return NULL;
+        }
         av_push(av, elem);
       }
 
@@ -26,97 +43,168 @@ static SV* recursive_parse_json(ondemand::value element, SV* v_true, SV* v_false
       HV *hv = newHV();
 
       for (auto field : element.get_object()) {
-        std::string_view key = field.unescaped_key();
-        SV *value = recursive_parse_json(field.value(), v_true, v_false);
-        // FIXME error
-        hv_store (hv, key.data(), key.size(), value, 0);
+        std::string_view key;
+        auto err = field.unescaped_key().get(key);
+        if (err) {
+          dec->error_code = err;
+          SvREFCNT_dec (hv);
+          return NULL;
+        }
+        ondemand::value val;
+        err = field.value().get(val);
+        if (err) {
+          dec->error_code = err;
+          SvREFCNT_dec (hv);
+          return NULL;
+        }
+        SV *sv_value = recursive_parse_json(dec, val);
+        if (!sv_value) {
+          SvREFCNT_dec (hv);
+          return NULL;
+        }
+        hv_store (hv, key.data(), key.size(), sv_value, 0);
       }
 
       res = newRV_noinc ((SV *)hv);
       break;
     }
   case ondemand::json_type::number:
-    switch (element.get_number_type()) {
-    case ondemand::number_type::floating_point_number:
-      {
-        double d = 0.0;
-        element.get_double().get(d);
-        // FIXME error
-        res = newSVnv(d);
-        break;
+    {
+      ondemand::number num;
+      auto err = element.get_number().get(num);
+      if (err) {
+        dec->error_code = err;
+        return NULL;
       }
-    case ondemand::number_type::signed_integer:
-      {
-        int64_t i = 0;
-        element.get_int64().get(i);
-        res = newSViv((IV)i);
-        break;
+      ondemand::number_type nt = num.get_number_type();
+      switch (nt) {
+      case ondemand::number_type::floating_point_number:
+        {
+          double d = 0.0;
+          auto err = element.get_double().get(d);
+          if (err) {
+            dec->error_code = err;
+            return NULL;
+          }
+          res = newSVnv(d);
+          break;
+        }
+      case ondemand::number_type::signed_integer:
+        {
+          int64_t i = 0;
+          auto err = element.get_int64().get(i);
+          if (err) {
+            dec->error_code = err;
+            return NULL;
+          }
+          res = newSViv((IV)i);
+          break;
+        }
+      case ondemand::number_type::unsigned_integer:
+        {
+          uint64_t u = 0;
+          auto err = element.get_uint64().get(u);
+          if (err) {
+            dec->error_code = err;
+            return NULL;
+          }
+          res = newSVuv((UV)u);
+          break;
+        }
       }
-    case ondemand::number_type::unsigned_integer:
-      {
-        uint64_t u = 0;
-        element.get_uint64().get(u);
-        res = newSVuv((UV)u);
-        break;
-      }
+      break;
     }
-    break;
   case ondemand::json_type::string:
     {
-      std::string_view str = element.get_string();
+      std::string_view str;
+      auto err = element.get_string().get(str);
+      if (err) {
+        dec->error_code = err;
+        return NULL;
+      }
       res = newSVpvn_utf8(str.data(), str.size(), 1);
       break;
     }
   case ondemand::json_type::boolean:
     {
       bool b = false;
-      element.get_bool().get(b);
-      // FIXME error
-      if (b) {
-        res = newSVsv(v_true);
-      } else {
-        res = newSVsv(v_false);
+      auto err = element.get_bool().get(b);
+      if (err) {
+        dec->error_code = err;
+        return NULL;
       }
+      res = newSVsv(b ? dec->v_true : dec->v_false);
       break;
     }
   case ondemand::json_type::null:
-    if(element.is_null()) {
-      res = newSVsv (&PL_sv_undef);
+    bool is_null;
+    auto err = element.is_null().get(is_null);
+    if(!is_null || err) {
+      // XXX Can we ever get here?
+      dec->error_code = err;
+      return NULL;
     }
-    // FIXME error
+    res = newSVsv (&PL_sv_undef);
     break;
   }
   return res;
 }
 
-Simdjson_wrapper simdjson_init() {
-	return new ondemand::parser;
+static void print_error(simdjson_decode_t *dec, ondemand::document& doc, bool valid_location) {
+  // TODO croak or save error msg or something
+  if (valid_location) {
+    const char *err_str = "";
+    doc.current_location().get(err_str);
+    std::cerr << "lofasz error " << dec->error_code << " near " << err_str << std::endl;
+  } else {
+    std::cerr << "lofasz error " << dec->error_code << " while parsing document" << std::endl;
+  }
 }
 
-SV * simdjson_decode(Simdjson_wrapper wrapper, SV *input, SV* v_true, SV* v_false) {
+simdjson_parser_t simdjson_init() {
+  return new ondemand::parser;
+}
+
+SV * simdjson_decode(simdjson_decode_t *dec) {
   SV *sv;
 
-  SvGROW(input, SvCUR (input) + SIMDJSON_PADDING);
-  /*char *end = SvEND(input);
-  *end = '\0';*/
+  char *end = SvEND(dec->input);
+  *end = '\0';
+  SvGROW(dec->input, SvCUR (dec->input) + SIMDJSON_PADDING);
 
-  ondemand::parser* parser = static_cast<ondemand::parser*>(wrapper);
-  ondemand::document doc = parser->iterate(SvPVX(input), SvCUR(input), SvLEN(input));
-  ondemand::value val = doc;
-  sv = recursive_parse_json(val, v_true, v_false);
+  ondemand::parser* parser = static_cast<ondemand::parser*>(dec->parser);
+  ondemand::document doc;
+  auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
+  if (err) {
+    dec->error_code = err;
+    print_error(dec, doc, false);
+    return NULL;
+  }
+  ondemand::value val;
+  err = doc.get_value().get(val);
+  if (err) {
+    // TODO handle scalar case if allow_nonref option is allowed
+    dec->error_code = err;
+    print_error(dec, doc, false);
+    return NULL;
+  }
+  sv = recursive_parse_json(dec, val);
+  if (dec->error_code != 0) {
+    print_error(dec, doc, true);
+  }
   return sv;
 }
 
-void simdjson_destroy(Simdjson_wrapper wrapper) {
-	ondemand::parser* parser = static_cast<ondemand::parser*>(wrapper);
-	delete parser;
+void simdjson_destroy(simdjson_parser_t wrapper) {
+  ondemand::parser* parser = static_cast<ondemand::parser*>(wrapper);
+  delete parser;
 }
 
 void simdjson_print_info() {
-	std::cout << "simdjson v" << SIMDJSON_VERSION << std::endl;
-	std::cout << "Detected the best implementation for your machine: " << simdjson::get_active_implementation()->name();
-	std::cout << "(" << simdjson::get_active_implementation()->description() << ")" << std::endl;
-	for (auto implementation : simdjson::get_available_implementations()) {
-	  std::cout << implementation->name() << ": " << implementation->description() << std::endl;
-	}
+  std::cout << "simdjson v" << SIMDJSON_VERSION << std::endl;
+  std::cout << "Detected the best implementation for your machine: " << simdjson::get_active_implementation()->name();
+  std::cout << "(" << simdjson::get_active_implementation()->description() << ")" << std::endl;
+  for (auto implementation : simdjson::get_available_implementations()) {
+    std::cout << implementation->name() << ": " << implementation->description() << std::endl;
+  }
 }

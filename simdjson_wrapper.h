@@ -10,11 +10,19 @@ extern "C" {
 #include "XSUB.h"
 
 
-typedef void* Simdjson_wrapper;
+typedef void* simdjson_parser_t;
 
-Simdjson_wrapper simdjson_init();
-void simdjson_destroy(Simdjson_wrapper self);
-SV* simdjson_decode(Simdjson_wrapper self, SV *input, SV* v_true, SV* v_false);
+typedef struct simdjson_decode_s {
+	simdjson_parser_t parser;
+	SV* input;
+	SV* v_true;
+	SV* v_false;
+	int error_code;
+} simdjson_decode_t;
+
+simdjson_parser_t simdjson_init();
+void simdjson_destroy(simdjson_parser_t self);
+SV* simdjson_decode(simdjson_decode_t *dec);
 
 #ifdef __cplusplus
 }
