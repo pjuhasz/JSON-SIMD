@@ -19,6 +19,7 @@ WriteMakefile(
     CONFIGURE_REQUIRES => { ExtUtils::MakeMaker => 6.52, Canary::Stability => 0 },
     OBJECT => '$(O_FILES)',
     LD => 'g++',
+    OPTIMIZE => '-O3',
     CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0",
 );
 

@@ -4,15 +4,39 @@
 
 using namespace simdjson; // optional
 
+#define ERROR_RETURN \
+  do { \
+    if (err) { \
+      dec->error_code = err; \
+      dec->error_line_number = __LINE__; \
+      return NULL; \
+    } \
+  } while (0)
+
+#define ERROR_RETURN_CLEANUP(var) \
+  do { \
+    if (err) { \
+      dec->error_code = err; \
+      dec->error_line_number = __LINE__; \
+      SvREFCNT_dec (var); \
+      return NULL; \
+    } \
+  } while (0)
+
+#define NULL_RETURN_CLEANUP(sv, var) \
+  do { \
+    if (!sv) { \
+      SvREFCNT_dec (var); \
+      return NULL; \
+    } \
+  } while (0)
+
 static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element) {
   SV* res = NULL;
 
   ondemand::json_type t;
   auto err = element.type().get(t);
-  if (err) {
-    dec->error_code = err;
-    return NULL;
-  }
+  ERROR_RETURN;
 
   switch (t) {
   case ondemand::json_type::array: 
@@ -22,16 +46,11 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
       for (auto child : element.get_array()) {
         ondemand::value val;
         auto err = child.get(val);
-        if (err) {
-          dec->error_code = err;
-          SvREFCNT_dec (av);
-          return NULL;
-        }
+        ERROR_RETURN_CLEANUP(av);
+
         SV *elem = recursive_parse_json(dec, val);
-        if (!elem) {
-          SvREFCNT_dec (av);
-          return NULL;
-        }
+        NULL_RETURN_CLEANUP(elem, av);
+
         av_push(av, elem);
       }
 
@@ -45,23 +64,15 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
       for (auto field : element.get_object()) {
         std::string_view key;
         auto err = field.unescaped_key().get(key);
-        if (err) {
-          dec->error_code = err;
-          SvREFCNT_dec (hv);
-          return NULL;
-        }
+        ERROR_RETURN_CLEANUP(hv);
+
         ondemand::value val;
         err = field.value().get(val);
-        if (err) {
-          dec->error_code = err;
-          SvREFCNT_dec (hv);
-          return NULL;
-        }
+        ERROR_RETURN_CLEANUP(hv);
+
         SV *sv_value = recursive_parse_json(dec, val);
-        if (!sv_value) {
-          SvREFCNT_dec (hv);
-          return NULL;
-        }
+        NULL_RETURN_CLEANUP(sv_value, hv);
+
         hv_store (hv, key.data(), key.size(), sv_value, 0);
       }
 
@@ -72,20 +83,16 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
     {
       ondemand::number num;
       auto err = element.get_number().get(num);
-      if (err) {
-        dec->error_code = err;
-        return NULL;
-      }
+      ERROR_RETURN; // TODO handle case of large numbers, not trivial :( (https://github.com/simdjson/simdjson/issues/167)
+
       ondemand::number_type nt = num.get_number_type();
       switch (nt) {
       case ondemand::number_type::floating_point_number:
         {
           double d = 0.0;
           auto err = element.get_double().get(d);
-          if (err) {
-            dec->error_code = err;
-            return NULL;
-          }
+          ERROR_RETURN;
+
           res = newSVnv(d);
           break;
         }
@@ -93,10 +100,8 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
         {
           int64_t i = 0;
           auto err = element.get_int64().get(i);
-          if (err) {
-            dec->error_code = err;
-            return NULL;
-          }
+          ERROR_RETURN;
+
           res = newSViv((IV)i);
           break;
         }
@@ -104,10 +109,8 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
         {
           uint64_t u = 0;
           auto err = element.get_uint64().get(u);
-          if (err) {
-            dec->error_code = err;
-            return NULL;
-          }
+          ERROR_RETURN;
+
           res = newSVuv((UV)u);
           break;
         }
@@ -118,10 +121,8 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
     {
       std::string_view str;
       auto err = element.get_string().get(str);
-      if (err) {
-        dec->error_code = err;
-        return NULL;
-      }
+      ERROR_RETURN;
+
       res = newSVpvn_utf8(str.data(), str.size(), 1);
       break;
     }
@@ -129,10 +130,8 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
     {
       bool b = false;
       auto err = element.get_bool().get(b);
-      if (err) {
-        dec->error_code = err;
-        return NULL;
-      }
+      ERROR_RETURN;
+
       res = newSVsv(b ? dec->v_true : dec->v_false);
       break;
     }
@@ -152,12 +151,13 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
 
 static void print_error(simdjson_decode_t *dec, ondemand::document& doc, bool valid_location) {
   // TODO croak or save error msg or something
+  const char *err_msg = error_message((simdjson::error_code)dec->error_code);
   if (valid_location) {
-    const char *err_str = "";
-    doc.current_location().get(err_str);
-    std::cerr << "lofasz error " << dec->error_code << " near " << err_str << std::endl;
+    const char *location = "";
+    doc.current_location().get(location); // TODO trim fragment;
+    std::cerr << "lofasz error " << err_msg << " at line " << dec->error_line_number << " near " << location << std::endl;
   } else {
-    std::cerr << "lofasz error " << dec->error_code << " while parsing document" << std::endl;
+    std::cerr << "lofasz error " << err_msg << " at line " << dec->error_line_number << " while parsing document" << std::endl;
   }
 }
 

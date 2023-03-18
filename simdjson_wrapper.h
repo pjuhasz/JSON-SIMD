@@ -18,6 +18,7 @@ typedef struct simdjson_decode_s {
 	SV* v_true;
 	SV* v_false;
 	int error_code;
+	int error_line_number;
 } simdjson_decode_t;
 
 simdjson_parser_t simdjson_init();
