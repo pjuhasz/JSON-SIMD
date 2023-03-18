@@ -17,5 +17,8 @@ WriteMakefile(
        Types::Serialiser => 0,
     },
     CONFIGURE_REQUIRES => { ExtUtils::MakeMaker => 6.52, Canary::Stability => 0 },
+    OBJECT => '$(O_FILES)',
+    LD => 'g++',
+    OPTIMIZE => '-g',
 );
 

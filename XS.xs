@@ -2,6 +2,8 @@
 #include "perl.h"
 #include "XSUB.h"
 
+#include "simdjson_wrapper.h"
+
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
@@ -49,6 +51,7 @@
 #define F_ALLOW_UNKNOWN  0x00002000UL
 #define F_ALLOW_TAGS     0x00004000UL
 #define F_HOOK           0x00080000UL // some hooks exist, so slow-path processing
+#define F_USE_SIMDJSON   0x00100000UL
 
 #define F_PRETTY    F_INDENT | F_SPACE_BEFORE | F_SPACE_AFTER
 
@@ -123,6 +126,8 @@ typedef struct {
   int incr_nest;   // {[]}-nesting level
   unsigned char incr_mode;
 
+  Simdjson_wrapper simdjson;
+
   SV *v_false, *v_true;
 } JSON;
 
@@ -132,6 +137,7 @@ json_init (JSON *json)
   static const JSON init = { F_ALLOW_NONREF, 512 };
 
   *json = init;
+  json->simdjson = simdjson_init();
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -1781,6 +1787,26 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   else
     sv_utf8_upgrade (string);
 
+  if (json->flags & F_USE_SIMDJSON) {
+    SV *my_true, *my_false; 
+    if (expect_false (!json->v_true))
+      my_true = GET_BOOL (true);
+    else
+      my_true = json->v_true;
+    if (expect_false (!json->v_false))
+      my_false = GET_BOOL (false);
+    else
+      my_false = json->v_false;
+
+    sv = simdjson_decode(json->simdjson, string, my_true, my_false);
+    sv = sv_2mortal (sv);
+
+    if (!(dec.json.flags & F_ALLOW_NONREF) && json_nonref (sv))
+      croak ("JSON text must be an object or array (but found number, string, true, false or null, use allow_nonref to allow this)");
+
+    return sv;
+  }
+
   SvGROW (string, SvCUR (string) + 1); // should basically be a NOP
 
   dec.json  = *json;
@@ -2132,6 +2158,7 @@ void ascii (JSON *self, int enable = 1)
         relaxed         = F_RELAXED
         allow_unknown   = F_ALLOW_UNKNOWN
         allow_tags      = F_ALLOW_TAGS
+        use_simdjson    = F_USE_SIMDJSON
 	PPCODE:
 {
         if (enable)
@@ -2158,6 +2185,7 @@ void get_ascii (JSON *self)
         get_relaxed         = F_RELAXED
         get_allow_unknown   = F_ALLOW_UNKNOWN
         get_allow_tags      = F_ALLOW_TAGS
+        get_use_simdjson    = F_USE_SIMDJSON
 	PPCODE:
         XPUSHs (boolSV (self->flags & ix));
 
@@ -2365,6 +2393,7 @@ void DESTROY (JSON *self)
         SvREFCNT_dec (self->cb_sk_object);
         SvREFCNT_dec (self->cb_object);
         SvREFCNT_dec (self->incr_text);
+        simdjson_destroy(self->simdjson);
 
 PROTOTYPES: ENABLE
 
