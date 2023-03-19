@@ -23,7 +23,7 @@ static bool validate_large_number(std::string_view& str) {
 
 #define ERROR_RETURN \
   do { \
-    if (err) { \
+    if (simdjson_unlikely(err)) { \
       dec->error_code = err; \
       dec->error_line_number = __LINE__; \
       return NULL; \
@@ -32,7 +32,7 @@ static bool validate_large_number(std::string_view& str) {
 
 #define ERROR_RETURN_CLEANUP(var) \
   do { \
-    if (err) { \
+    if (simdjson_unlikely(err)) { \
       dec->error_code = err; \
       dec->error_line_number = __LINE__; \
       SvREFCNT_dec (var); \
@@ -42,7 +42,7 @@ static bool validate_large_number(std::string_view& str) {
 
 #define NULL_RETURN_CLEANUP(sv, var) \
   do { \
-    if (!sv) { \
+    if (simdjson_unlikely(!sv)) { \
       SvREFCNT_dec (var); \
       return NULL; \
     } \
@@ -101,7 +101,7 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
     {
       ondemand::number num;
       auto err = element.get_number().get(num);
-      if (err) {
+      if (simdjson_unlikely(err)) {
         // handle case of large numbers:
         // we save it as a string, but try to validate if it looks like a number at least
         auto str = get_raw_json_token_from(element);
@@ -167,7 +167,7 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
   case ondemand::json_type::null:
     bool is_null;
     auto err = element.is_null().get(is_null);
-    if(!is_null || err) {
+    if(simdjson_unlikely(!is_null || err)) {
       // XXX Can we ever get here?
       dec->error_code = err;
       return NULL;
@@ -205,7 +205,7 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
   ondemand::document doc;
 
   auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
-  if (err) {
+  if (simdjson_unlikely(err)) {
     dec->error_code = err;
     print_error(dec, doc, false);
     return NULL;
@@ -213,7 +213,7 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
 
   bool is_scalar = false;
   doc.is_scalar().get(is_scalar);
-  if (is_scalar) {
+  if (simdjson_unlikely(is_scalar)) {
     sv = recursive_parse_json<ondemand::document&>(dec, doc);
   } else {
     ondemand::value val;
