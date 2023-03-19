@@ -15,9 +15,37 @@ static std::string_view get_raw_json_token_from(ondemand::value val) {
   return val.raw_json_token();
 }
 
-static bool validate_large_number(std::string_view& str) {
-  // check if it matches /[+-]?[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly
-  // TODO
+// Check if it matches /[+-]?[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly.
+// This should be a rare special case.
+static bool validate_large_number(std::string_view& s) {
+  if (s.size() == 0)
+    return false;
+
+  unsigned long i = 0;
+  if (s[0] == '-' || s[0] == '+')
+    i = 1;
+
+  bool got_decimal = false;
+  bool got_exp = false;
+
+  for (; i < s.length(); i++) {
+    if ( !( isdigit(s[i]) || (!got_decimal && s[i] == '.') || (!got_exp && (s[i] == 'e' || s[i] == 'E') ) ) )
+      return false;
+    if (s[i] == '.')
+      got_decimal = true;
+    if (s[i] == 'e' || s[i] == 'E') {
+      got_exp = true;
+      got_decimal = true; // dot also not allowed after exponent
+      if (i+1 == s.length())
+        return false;
+      // peak ahead and consume exponent sign if present
+      if (s[i+1] == '-' || s[i+1] == '+') {
+        i++;
+        if (i+1 == s.length())
+          return false;
+      }
+    }
+  }
   return true;
 }
 
