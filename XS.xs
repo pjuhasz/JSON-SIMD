@@ -1809,7 +1809,7 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
     }
     sv = sv_2mortal (sv);
 
-    if (!(dec.json.flags & F_ALLOW_NONREF) && json_nonref (sv))
+    if (!(json->flags & F_ALLOW_NONREF) && json_nonref (sv))
       croak ("JSON text must be an object or array (but found number, string, true, false or null, use allow_nonref to allow this)");
 
     return sv;

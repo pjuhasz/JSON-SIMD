@@ -4,6 +4,17 @@
 
 using namespace simdjson; // optional
 
+// nonsense required because raw_json_token() behaves differently for values and documents
+static std::string_view get_raw_json_token_from(ondemand::document& doc) {
+  std::string_view str;
+  doc.raw_json_token().get(str);
+  return str;
+}
+
+static std::string_view get_raw_json_token_from(ondemand::value val) {
+  return val.raw_json_token();
+}
+
 static bool validate_large_number(std::string_view& str) {
   // check if it matches /[+-]?[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly
   // TODO
@@ -37,7 +48,8 @@ static bool validate_large_number(std::string_view& str) {
     } \
   } while (0)
 
-static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element) {
+template<typename T>
+static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
   SV* res = NULL;
 
   ondemand::json_type t;
@@ -92,7 +104,7 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
       if (err) {
         // handle case of large numbers:
         // we save it as a string, but try to validate if it looks like a number at least
-        auto str = element.raw_json_token();
+        auto str = get_raw_json_token_from(element);
         if (!validate_large_number(str)) {
           // we forge an error code and bail out
           err = NUMBER_ERROR;
@@ -191,21 +203,23 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
 
   ondemand::parser* parser = static_cast<ondemand::parser*>(dec->parser);
   ondemand::document doc;
+
   auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
   if (err) {
     dec->error_code = err;
     print_error(dec, doc, false);
     return NULL;
   }
-  ondemand::value val;
-  err = doc.get_value().get(val);
-  if (err) {
-    // TODO handle scalar case if allow_nonref option is allowed
-    dec->error_code = err;
-    print_error(dec, doc, false);
-    return NULL;
+
+  bool is_scalar = false;
+  doc.is_scalar().get(is_scalar);
+  if (is_scalar) {
+    sv = recursive_parse_json<ondemand::document&>(dec, doc);
+  } else {
+    ondemand::value val;
+    doc.get_value().get(val);
+    sv = recursive_parse_json<ondemand::value>(dec, val);
   }
-  sv = recursive_parse_json(dec, val);
   if (dec->error_code != 0) {
     print_error(dec, doc, true);
   }
