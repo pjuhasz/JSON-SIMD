@@ -4,6 +4,12 @@
 
 using namespace simdjson; // optional
 
+static bool validate_large_number(std::string_view& str) {
+  // check if it matches /[+-]?[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly
+  // TODO
+  return true;
+}
+
 #define ERROR_RETURN \
   do { \
     if (err) { \
@@ -83,7 +89,18 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, ondemand::value element)
     {
       ondemand::number num;
       auto err = element.get_number().get(num);
-      ERROR_RETURN; // TODO handle case of large numbers, not trivial :( (https://github.com/simdjson/simdjson/issues/167)
+      if (err) {
+        // handle case of large numbers:
+        // we save it as a string, but try to validate if it looks like a number at least
+        auto str = element.raw_json_token();
+        if (!validate_large_number(str)) {
+          // we forge an error code and bail out
+          err = NUMBER_ERROR;
+          ERROR_RETURN;
+        }
+        res = newSVpvn_utf8(str.data(), str.size(), 1);
+        break;
+      }
 
       ondemand::number_type nt = num.get_number_type();
       switch (nt) {
