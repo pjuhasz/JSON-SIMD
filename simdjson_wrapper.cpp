@@ -38,7 +38,7 @@ static bool validate_large_number(std::string_view& s) {
       got_decimal = true; // dot also not allowed after exponent
       if (i+1 == s.length())
         return false;
-      // peak ahead and consume exponent sign if present
+      // peek ahead and consume exponent sign if present
       if (s[i+1] == '-' || s[i+1] == '+') {
         i++;
         if (i+1 == s.length())
