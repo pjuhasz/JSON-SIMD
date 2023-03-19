@@ -14,11 +14,13 @@ typedef void* simdjson_parser_t;
 
 typedef struct simdjson_decode_s {
 	simdjson_parser_t parser;
-	SV* input;
-	SV* v_true;
-	SV* v_false;
-	int error_code;
-	int error_line_number;
+	SV                *input;
+	SV                *v_true;
+	SV                *v_false;
+	char              *pos;
+	int               error_code;
+	int               error_line_number;
+	const char        *error_msg;
 } simdjson_decode_t;
 
 simdjson_parser_t simdjson_init();

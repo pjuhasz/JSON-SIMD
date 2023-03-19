@@ -178,15 +178,20 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
   return res;
 }
 
-static void print_error(simdjson_decode_t *dec, ondemand::document& doc, bool valid_location) {
-  // TODO croak or save error msg or something
-  const char *err_msg = error_message((simdjson::error_code)dec->error_code);
+static void save_errormsg_location(simdjson_decode_t *dec, ondemand::document& doc, bool valid_location) {
+  dec->error_msg = error_message((simdjson::error_code)dec->error_code);
   if (valid_location) {
-    const char *location = "";
-    doc.current_location().get(location); // TODO trim fragment;
-    std::cerr << "lofasz error " << err_msg << " at line " << dec->error_line_number << " near " << location << std::endl;
+    const char *location = NULL;
+    auto err = doc.current_location().get(location);
+    if (err) { // out of bounds, i.e. end of document
+      dec->pos = SvEND(dec->input);
+    } else {
+      dec->pos = const_cast<char*>(location);
+    }
+    //std::cerr << "DEBUG error " << err_msg << " at line " << dec->error_line_number << " near " << location << std::endl;
   } else {
-    std::cerr << "lofasz error " << err_msg << " at line " << dec->error_line_number << " while parsing document" << std::endl;
+    dec->pos = SvEND(dec->input);
+    //std::cerr << "DEBUG error " << err_msg << " at line " << dec->error_line_number << " while parsing document" << std::endl;
   }
 }
 
@@ -197,8 +202,6 @@ simdjson_parser_t simdjson_init() {
 SV * simdjson_decode(simdjson_decode_t *dec) {
   SV *sv;
 
-  char *end = SvEND(dec->input);
-  *end = '\0';
   SvGROW(dec->input, SvCUR (dec->input) + SIMDJSON_PADDING);
 
   ondemand::parser* parser = static_cast<ondemand::parser*>(dec->parser);
@@ -207,7 +210,7 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
   auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
   if (simdjson_unlikely(err)) {
     dec->error_code = err;
-    print_error(dec, doc, false);
+    save_errormsg_location(dec, doc, false);
     return NULL;
   }
 
@@ -220,9 +223,7 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
     doc.get_value().get(val);
     sv = recursive_parse_json<ondemand::value>(dec, val);
   }
-  if (dec->error_code != 0) {
-    print_error(dec, doc, true);
-  }
+  save_errormsg_location(dec, doc, true);
   return sv;
 }
 
@@ -231,6 +232,7 @@ void simdjson_destroy(simdjson_parser_t wrapper) {
   delete parser;
 }
 
+/* not used currently, just here for reference */
 void simdjson_print_info() {
   std::cout << "simdjson v" << SIMDJSON_VERSION << std::endl;
   std::cout << "Detected the best implementation for your machine: " << simdjson::get_active_implementation()->name();

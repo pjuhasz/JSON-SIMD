@@ -1789,6 +1789,17 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
 
   SvGROW (string, SvCUR (string) + 1); // should basically be a NOP
 
+  dec.json  = *json;
+  dec.cur   = SvPVX (string);
+  dec.end   = SvEND (string);
+  dec.err   = 0;
+  dec.depth = 0;
+
+  if (dec.json.cb_object || dec.json.cb_sk_object)
+    dec.json.flags |= F_HOOK;
+
+  *dec.end = 0; // this should basically be a nop, too, but make sure it's there
+
   if (json->flags & F_USE_SIMDJSON) {
     simdjson_decode_t sj_dec = {0};
     sj_dec.parser = json->simdjson;
@@ -1804,38 +1815,23 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
       sj_dec.v_false = json->v_false;
 
     sv = simdjson_decode(&sj_dec);
-    if (sv == NULL) {
-      croak("FIXME dying");
-    }
-    sv = sv_2mortal (sv);
 
-    if (!(json->flags & F_ALLOW_NONREF) && json_nonref (sv))
-      croak ("JSON text must be an object or array (but found number, string, true, false or null, use allow_nonref to allow this)");
+    dec.cur = sj_dec.pos;
+    dec.end = SvEND(string);
+    dec.err = sj_dec.error_msg;
 
-    return sv;
+  } else {
+    decode_ws (&dec);
+    sv = decode_sv (&dec);
   }
-
-  dec.json  = *json;
-  dec.cur   = SvPVX (string);
-  dec.end   = SvEND (string);
-  dec.err   = 0;
-  dec.depth = 0;
-
-  if (dec.json.cb_object || dec.json.cb_sk_object)
-    dec.json.flags |= F_HOOK;
-
-  *dec.end = 0; // this should basically be a nop, too, but make sure it's there
-
-  decode_ws (&dec);
-  sv = decode_sv (&dec);
 
   if (offset_return)
     *offset_return = dec.cur - SvPVX (string);
   else if (sv)
     {
       // check for trailing garbage
-      decode_ws (&dec);
-
+      if (!(json->flags & F_USE_SIMDJSON))
+        decode_ws (&dec);
       if (dec.cur != dec.end)
         {
           dec.err = "garbage after JSON object";
