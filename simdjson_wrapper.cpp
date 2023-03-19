@@ -7,7 +7,7 @@ using namespace simdjson; // optional
 // nonsense required because raw_json_token() behaves differently for values and documents
 static std::string_view get_raw_json_token_from(ondemand::document& doc) {
   std::string_view str;
-  doc.raw_json_token().get(str);
+  if (doc.raw_json_token().get(str)) { /* error ignored */ }
   return str;
 }
 
@@ -212,7 +212,7 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
   }
 
   bool is_scalar = false;
-  doc.is_scalar().get(is_scalar);
+  if (doc.is_scalar().get(is_scalar)) {/* error ignored */}
   if (simdjson_unlikely(is_scalar)) {
     sv = recursive_parse_json<ondemand::document&>(dec, doc);
   } else {
