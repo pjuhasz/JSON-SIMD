@@ -246,7 +246,7 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
   err = doc.is_scalar().get(is_scalar);
   if (simdjson_unlikely(err)) {
     dec->error_code = err;
-    save_errormsg_location(dec, doc, false);
+    save_errormsg_location(dec, doc, true);
     return NULL;
   }
   if (simdjson_unlikely(is_scalar)) {
