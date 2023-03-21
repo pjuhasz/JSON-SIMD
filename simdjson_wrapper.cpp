@@ -243,7 +243,12 @@ SV * simdjson_decode(simdjson_decode_t *dec) {
   }
 
   bool is_scalar = false;
-  if (doc.is_scalar().get(is_scalar)) {/* error ignored */}
+  err = doc.is_scalar().get(is_scalar);
+  if (simdjson_unlikely(err)) {
+    dec->error_code = err;
+    save_errormsg_location(dec, doc, false);
+    return NULL;
+  }
   if (simdjson_unlikely(is_scalar)) {
     sv = recursive_parse_json<ondemand::document&>(dec, doc);
   } else {
