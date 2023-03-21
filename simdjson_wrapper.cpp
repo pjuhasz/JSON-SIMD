@@ -22,7 +22,7 @@ static bool validate_large_number(std::string_view& s) {
     return false;
 
   unsigned long i = 0;
-  if (s[0] == '-' || s[0] == '+')
+  if (s[0] == '-')
     i = 1;
 
   bool got_decimal = false;
