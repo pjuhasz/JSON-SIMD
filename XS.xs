@@ -2138,6 +2138,11 @@ void ascii (JSON *self, int enable = 1)
         else
           self->flags &= ~ix;
 
+        if (self->flags & F_USE_SIMDJSON && self->flags & F_ALLOW_TAGS)
+          croak("allow_tags cannot be used with the simdjson decoder");
+        if (self->flags & F_USE_SIMDJSON && self->flags & F_RELAXED)
+          croak("relaxed mode cannot be used with the simdjson decoder");
+
         XPUSHs (ST (0));
 }
 
