@@ -250,7 +250,7 @@ simdjson_parser_t simdjson_init() {
 }
 
 SV * simdjson_decode(dec_t *dec) {
-  SV *sv;
+  SV *sv = NULL;
 
   SvGROW(dec->input, SvCUR (dec->input) + SIMDJSON_PADDING);
 
@@ -272,10 +272,22 @@ SV * simdjson_decode(dec_t *dec) {
     return NULL;
   }
   if (simdjson_unlikely(is_scalar)) {
-    sv = recursive_parse_json<ondemand::document&>(dec, doc);
+    if (dec->path) {
+      err = SCALAR_DOCUMENT_AS_VALUE;
+    } else {
+      sv = recursive_parse_json<ondemand::document&>(dec, doc);
+    }
   } else {
     ondemand::value val;
-    doc.get_value().get(val);
+    if (dec->path) {
+      err = doc.at_pointer(dec->path).get(val);
+      if (err) {
+        save_errormsg_location(dec, doc, true);
+        return NULL;
+      }
+    } else {
+      doc.get_value().get(val);
+    }
     sv = recursive_parse_json<ondemand::value>(dec, val);
   }
   save_errormsg_location(dec, doc, true);

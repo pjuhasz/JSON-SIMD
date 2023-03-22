@@ -46,6 +46,7 @@ typedef struct
 
   // fields needed for simdjson decoder
   SV *input; // original JSON document, needed because we have to pad it (and for the various SvXXX pointers)
+  char *path; // JSON path
   int error_code; // set by simdjson_decoder while parsing, error message will be looked up in the end if != 0
   int error_line_number; // for debug purposes
 } dec_t;

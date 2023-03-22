@@ -1718,7 +1718,7 @@ fail:
 }
 
 static SV *
-decode_json (SV *string, JSON *json, STRLEN *offset_return)
+decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
 {
   dec_t dec;
   SV *sv;
@@ -1771,8 +1771,6 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   dec.end   = SvEND (string);
   dec.err   = 0;
   dec.depth = 0;
-  dec.error_code = 0;
-  dec.input = string;
 
   if (dec.json.cb_object || dec.json.cb_sk_object)
     dec.json.flags |= F_HOOK;
@@ -1780,6 +1778,19 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   *dec.end = 0; // this should basically be a nop, too, but make sure it's there
 
   if (dec.json.flags & F_USE_SIMDJSON) {
+    dec.error_code = 0;
+    dec.input = string;
+
+    // handle path
+    if (path) {
+      // repeat the voodoo above for the path argument too
+      if (SvMAGICAL (path) || !SvPOK (path) || SvIsCOW_shared_hash (path))
+        path = sv_2mortal (newSVsv (path));
+
+      SvUPGRADE (path, SVt_PV);
+      dec.path = SvPVX(path);
+    }
+
     // we don't want to mess with this from the C++ code 
     if (expect_false (!dec.json.v_true))
       dec.json.v_true = GET_BOOL (true);
@@ -1797,7 +1808,7 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
 
   if (offset_return)
     *offset_return = dec.cur - SvPVX (string);
-  else if (sv)
+  else if (sv && !path)
     {
       // check for trailing garbage
       if (!(dec.json.flags & F_USE_SIMDJSON)) // simdjson gobbles up trailing whitespace anyway
@@ -2226,7 +2237,7 @@ void encode (JSON *self, SV *scalar)
 
 void decode (JSON *self, SV *jsonstr)
 	PPCODE:
-        PUTBACK; jsonstr = decode_json (jsonstr, self, 0); SPAGAIN;
+        PUTBACK; jsonstr = decode_json (jsonstr, self, 0, 0); SPAGAIN;
         XPUSHs (jsonstr);
 
 void decode_prefix (JSON *self, SV *jsonstr)
@@ -2234,11 +2245,16 @@ void decode_prefix (JSON *self, SV *jsonstr)
 {
 	SV *sv;
         STRLEN offset;
-        PUTBACK; sv = decode_json (jsonstr, self, &offset); SPAGAIN;
+        PUTBACK; sv = decode_json (jsonstr, self, &offset, 0); SPAGAIN;
         EXTEND (SP, 2);
         PUSHs (sv);
         PUSHs (sv_2mortal (newSVuv (ptr_to_index (jsonstr, SvPV_nolen (jsonstr) + offset))));
 }
+
+void decode_at_path (JSON *self, SV *jsonstr, SV *path)
+	PPCODE:
+        PUTBACK; jsonstr = decode_json (jsonstr, self, 0, path); SPAGAIN;
+        XPUSHs (jsonstr);
 
 void incr_parse (JSON *self, SV *jsonstr = 0)
 	PPCODE:
@@ -2317,7 +2333,7 @@ void incr_parse (JSON *self, SV *jsonstr = 0)
                     }
                 }
 
-              PUTBACK; sv = decode_json (self->incr_text, self, &offset); SPAGAIN;
+              PUTBACK; sv = decode_json (self->incr_text, self, &offset, 0); SPAGAIN;
               XPUSHs (sv);
 
               self->incr_pos -= offset;
@@ -2390,7 +2406,7 @@ void decode_json (SV *jsonstr)
         JSON json;
         json_init (&json);
         json.flags |= F_UTF8;
-        PUTBACK; jsonstr = decode_json (jsonstr, &json, 0); SPAGAIN;
+        PUTBACK; jsonstr = decode_json (jsonstr, &json, 0, 0); SPAGAIN;
         XPUSHs (jsonstr);
 }
 
