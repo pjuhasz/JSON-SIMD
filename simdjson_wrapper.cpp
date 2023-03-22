@@ -273,7 +273,7 @@ SV * simdjson_decode(dec_t *dec) {
   }
   if (simdjson_unlikely(is_scalar)) {
     if (dec->path) {
-      err = SCALAR_DOCUMENT_AS_VALUE;
+      dec->error_code = SCALAR_DOCUMENT_AS_VALUE;
     } else {
       sv = recursive_parse_json<ondemand::document&>(dec, doc);
     }
@@ -281,7 +281,8 @@ SV * simdjson_decode(dec_t *dec) {
     ondemand::value val;
     if (dec->path) {
       err = doc.at_pointer(dec->path).get(val);
-      if (err) {
+      if (simdjson_unlikely(err)) {
+        dec->error_code = err;
         save_errormsg_location(dec, doc, true);
         return NULL;
       }
