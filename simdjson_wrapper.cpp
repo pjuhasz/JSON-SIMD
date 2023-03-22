@@ -49,6 +49,16 @@ static bool validate_large_number(std::string_view& s) {
   return true;
 }
 
+#define DEC_INC_DEPTH \
+  do { \
+    if (++dec->depth > dec->json.max_depth) { \
+      err = DEPTH_ERROR; \
+      --dec->depth; \
+    } \
+  } while (0)
+
+#define DEC_DEC_DEPTH --dec->depth
+
 #define ERROR_RETURN \
   do { \
     if (simdjson_unlikely(err)) { \
@@ -76,6 +86,7 @@ static bool validate_large_number(std::string_view& s) {
     } \
   } while (0)
 
+
 template<typename T>
 static SV* recursive_parse_json(dec_t *dec, T element) {
   SV* res = NULL;
@@ -87,6 +98,9 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
   switch (t) {
   case ondemand::json_type::array: 
     {
+      DEC_INC_DEPTH;
+      ERROR_RETURN;
+
       AV *av = newAV();
 
       for (auto child : element.get_array()) {
@@ -100,11 +114,15 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         av_push(av, elem);
       }
 
+      DEC_DEC_DEPTH;
       res = newRV_noinc ((SV *)av);
       break;
     }
   case ondemand::json_type::object:
     {
+      DEC_INC_DEPTH;
+      ERROR_RETURN;
+
       HV *hv = newHV();
 
       for (auto field : element.get_object()) {
@@ -122,6 +140,7 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         hv_store (hv, key.data(), key.size(), sv_value, 0);
       }
 
+      DEC_DEC_DEPTH;
       res = newRV_noinc ((SV *)hv);
       break;
     }

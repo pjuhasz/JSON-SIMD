@@ -1800,7 +1800,7 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   else if (sv)
     {
       // check for trailing garbage
-      if (!(dec.json.flags & F_USE_SIMDJSON)) // FIXME don't check, do it anyway?
+      if (!(dec.json.flags & F_USE_SIMDJSON)) // simdjson gobbles up trailing whitespace anyway
         decode_ws (&dec);
       if (dec.cur != dec.end)
         {
