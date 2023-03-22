@@ -112,24 +112,8 @@ enum {
 
 #define INCR_DONE(json) ((json)->incr_nest <= 0 && (json)->incr_mode == INCR_M_JSON)
 
-typedef struct {
-  U32 flags;
-  U32 max_depth;
-  STRLEN max_size;
-
-  SV *cb_object;
-  HV *cb_sk_object;
-
-  // for the incremental parser
-  SV *incr_text;   // the source text so far
-  STRLEN incr_pos; // the current offset into the text
-  int incr_nest;   // {[]}-nesting level
-  unsigned char incr_mode;
-
-  simdjson_parser_t simdjson;
-
-  SV *v_false, *v_true;
-} JSON;
+// main JSON struct definition moved to simdjson_wrapper.h
+// typedef struct { ... } JSON;
 
 INLINE void
 json_init (JSON *json)
@@ -1006,15 +990,8 @@ encode_json (SV *scalar, JSON *json)
 // decoder
 
 // structure used for decoding JSON
-typedef struct
-{
-  char *cur; // current parser pointer
-  char *end; // end of input string
-  const char *err; // parse error, if != 0
-  JSON json;
-  U32 depth; // recursion depth
-  U32 maxdepth; // recursion depth limit
-} dec_t;
+// -- moved to simdjson_wrapper.h
+// typedef struct { ... } dec_t;
 
 INLINE void
 decode_comment (dec_t *dec)
@@ -1794,31 +1771,24 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   dec.end   = SvEND (string);
   dec.err   = 0;
   dec.depth = 0;
+  dec.error_code = 0;
+  dec.input = string;
 
   if (dec.json.cb_object || dec.json.cb_sk_object)
     dec.json.flags |= F_HOOK;
 
   *dec.end = 0; // this should basically be a nop, too, but make sure it's there
 
-  if (json->flags & F_USE_SIMDJSON) {
-    simdjson_decode_t sj_dec = {0};
-    sj_dec.parser = json->simdjson;
-    sj_dec.input = string;
- 
-    if (expect_false (!json->v_true))
-      sj_dec.v_true = GET_BOOL (true);
-    else
-      sj_dec.v_true = json->v_true;
-    if (expect_false (!json->v_false))
-      sj_dec.v_false = GET_BOOL (false);
-    else
-      sj_dec.v_false = json->v_false;
+  if (dec.json.flags & F_USE_SIMDJSON) {
+    // we don't want to mess with this from the C++ code 
+    if (expect_false (!dec.json.v_true))
+      dec.json.v_true = GET_BOOL (true);
+    if (expect_false (!dec.json.v_false))
+      dec.json.v_false = GET_BOOL (false);
 
-    sv = simdjson_decode(&sj_dec);
+    sv = simdjson_decode(&dec);
 
-    dec.cur = sj_dec.pos;
     dec.end = SvEND(string);
-    dec.err = sj_dec.error_msg;
 
   } else {
     decode_ws (&dec);
@@ -1830,7 +1800,7 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return)
   else if (sv)
     {
       // check for trailing garbage
-      if (!(json->flags & F_USE_SIMDJSON))
+      if (!(dec.json.flags & F_USE_SIMDJSON)) // FIXME don't check, do it anyway?
         decode_ws (&dec);
       if (dec.cur != dec.end)
         {

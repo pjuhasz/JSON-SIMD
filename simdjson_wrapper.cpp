@@ -77,7 +77,7 @@ static bool validate_large_number(std::string_view& s) {
   } while (0)
 
 template<typename T>
-static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
+static SV* recursive_parse_json(dec_t *dec, T element) {
   SV* res = NULL;
 
   ondemand::json_type t;
@@ -189,7 +189,7 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
       auto err = element.get_bool().get(b);
       ERROR_RETURN;
 
-      res = newSVsv(b ? dec->v_true : dec->v_false);
+      res = newSVsv(b ? dec->json.v_true : dec->json.v_false);
       break;
     }
   case ondemand::json_type::null:
@@ -206,33 +206,36 @@ static SV* recursive_parse_json(simdjson_decode_t *dec, T element) {
   return res;
 }
 
-static void save_errormsg_location(simdjson_decode_t *dec, ondemand::document& doc, bool valid_location) {
-  dec->error_msg = error_message((simdjson::error_code)dec->error_code);
+static void save_errormsg_location(dec_t *dec, ondemand::document& doc, bool valid_location) {
+  if (dec->error_code) {
+    dec->err = error_message((simdjson::error_code)dec->error_code);
+  }
   if (valid_location) {
     const char *location = NULL;
     auto err = doc.current_location().get(location);
     if (err) { // out of bounds, i.e. end of document
-      dec->pos = SvEND(dec->input);
+      dec->cur = SvEND(dec->input);
     } else {
-      dec->pos = const_cast<char*>(location);
+      dec->cur = const_cast<char*>(location);
     }
     //std::cerr << "DEBUG error " << err_msg << " at line " << dec->error_line_number << " near " << location << std::endl;
   } else {
-    dec->pos = SvEND(dec->input);
+    dec->cur = SvEND(dec->input);
     //std::cerr << "DEBUG error " << err_msg << " at line " << dec->error_line_number << " while parsing document" << std::endl;
   }
+  dec->end = SvEND(dec->input);
 }
 
 simdjson_parser_t simdjson_init() {
   return new ondemand::parser;
 }
 
-SV * simdjson_decode(simdjson_decode_t *dec) {
+SV * simdjson_decode(dec_t *dec) {
   SV *sv;
 
   SvGROW(dec->input, SvCUR (dec->input) + SIMDJSON_PADDING);
 
-  ondemand::parser* parser = static_cast<ondemand::parser*>(dec->parser);
+  ondemand::parser* parser = static_cast<ondemand::parser*>(dec->json.simdjson);
   ondemand::document doc;
 
   auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
