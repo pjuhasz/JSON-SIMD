@@ -50,30 +50,39 @@ eval { decode_json ("\"\"\x00") }; ok $@ =~ /garbage after/;
 eval { decode_json ("[]\x00") }; ok $@ =~ /garbage after/;
 
 # simdjson decode tests
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('"\u1234\udc00"') }; ok $@ =~ /missing high /; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('"\ud800"') }; ok $@ =~ /missing low /;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('"\ud800\u1234"') }; ok $@ =~ /surrogate pair /;; warn $@;
+# unfortunately it doesn't tell us the details about bad surrogates
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('"\u1234\udc00"') }; okf($@, "Problem while parsing a string");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('"\ud800"') }; okf($@, "Problem while parsing a string");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('"\ud800\u1234"') }; okf($@, "Problem while parsing a string");
 
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (0)->decode ('null') }; ok $@ =~ /allow_nonref/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('+0') }; ok $@ =~ /malformed/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('.2') }; ok $@ =~ /malformed/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('bare') }; ok $@ =~ /malformed/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('naughty') }; ok $@ =~ /null/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('01') }; ok $@ =~ /leading zero/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('00') }; ok $@ =~ /leading zero/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('-0.') }; ok $@ =~ /decimal point/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('-0e') }; ok $@ =~ /exp sign/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('-e+1') }; ok $@ =~ /initial minus/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ("\"\n\"") }; ok $@ =~ /invalid character/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ("\"\x01\"") }; ok $@ =~ /invalid character/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->decode ('[5') }; ok $@ =~ /parsing array/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->decode ('{"5"') }; ok $@ =~ /':' expected/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->decode ('{"5":null') }; ok $@ =~ /parsing object/;; warn $@;
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (0)->decode ('null') }; okf($@, "allow_nonref");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('+0') }; okf($@, "improper structure");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('.2') }; okf($@, "improper structure");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('bare') }; okf($@, "improper structure");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('naughty') }; okf($@, "letter 'n'");
+# doesn't tell us the details - XXX perhaps set our own error messages in the hand-rolled bad number parser?
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('01') }; okf($@, "Problem while parsing a number");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('00') }; okf($@, "Problem while parsing a number");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('-0.') }; okf($@, "Problem while parsing a number");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ('-0e') }; okf($@, "Problem while parsing a number");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ('-e+1') }; okf($@, "Problem while parsing a number");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref->decode ("\"\n\"") }; okf($@, "unescaped characters");
+eval { JSON::XS->new->use_simdjson(1)->allow_nonref (1)->decode ("\"\x01\"") }; okf($@, "unescaped characters");
+# doesn't tell us the details
+eval { JSON::XS->new->use_simdjson(1)->decode ('[5') }; okf($@, "improper structure");
+eval { JSON::XS->new->use_simdjson(1)->decode ('{"5"') }; okf($@, "improper structure");
+eval { JSON::XS->new->use_simdjson(1)->decode ('{"5":null') }; okf($@, "improper structure"); # FIXME this fails on the null, why??
 
-eval { JSON::XS->new->use_simdjson(1)->decode (undef) }; ok $@ =~ /malformed/;; warn $@;
+eval { JSON::XS->new->use_simdjson(1)->decode (undef) }; okf($@, "Empty");
 eval { JSON::XS->new->use_simdjson(1)->decode (\5) }; ok !!$@; # Can't coerce readonly
-eval { JSON::XS->new->use_simdjson(1)->decode ([]) }; ok $@ =~ /malformed/;; warn $@;
-eval { JSON::XS->new->use_simdjson(1)->decode (\*STDERR) }; ok $@ =~ /malformed/;; warn $@;
+eval { JSON::XS->new->use_simdjson(1)->decode ([]) }; okf($@, "improper structure");
+eval { JSON::XS->new->use_simdjson(1)->decode (\*STDERR) }; okf($@, "improper structure");
 eval { JSON::XS->new->use_simdjson(1)->decode (*STDERR) }; ok !!$@; # cannot coerce GLOB
 
 
+sub okf {
+	my ($e, $m) = @_;
+	my $found = ($e =~ /$m/);
+	ok $found;
+	print "   # $m -- $e" if !$found;
+}
