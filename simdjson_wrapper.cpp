@@ -15,7 +15,7 @@ static std::string_view get_raw_json_token_from(ondemand::value val) {
   return val.raw_json_token();
 }
 
-// Check if it matches /[+-]?[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly.
+// Check if it matches /[+-]?[1-9][0-9]*\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly.
 // This should be a rare special case.
 static bool validate_large_number(std::string_view& s) {
   if (s.size() == 0)
@@ -28,7 +28,10 @@ static bool validate_large_number(std::string_view& s) {
   bool got_decimal = false;
   bool got_exp = false;
 
-  for (; i < s.length(); i++) {
+  if (i == s.size() || s[i] == '0' || ! isdigit(s[i]))
+    return false;
+
+  for (; i < s.size(); i++) {
     if ( !( isdigit(s[i]) || (!got_decimal && s[i] == '.') || (!got_exp && (s[i] == 'e' || s[i] == 'E') ) ) )
       return false;
     if (s[i] == '.')
@@ -223,7 +226,9 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
     auto err = element.is_null().get(is_null);
     if(simdjson_unlikely(!is_null || err)) {
       // we falsify the error, it would be either nothing or INCORRECT_TYPE, which is less informative
-      dec->error_code = N_ATOM_ERROR;
+      if (err == 0 || err == INCORRECT_TYPE) {
+        dec->error_code = N_ATOM_ERROR;
+      }
       dec->error_line_number = __LINE__;
       return NULL;
     }
@@ -245,7 +250,7 @@ static void save_errormsg_location(dec_t *dec, ondemand::document& doc, bool val
     } else {
       dec->cur = const_cast<char*>(location);
     }
-    //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " near " << location << std::endl;
+    //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " near " << dec->cur << std::endl;
   } else {
     dec->cur = SvEND(dec->input);
     //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " while parsing document" << std::endl;
@@ -257,6 +262,17 @@ simdjson_parser_t simdjson_init() {
   return new ondemand::parser;
 }
 
+#define ERROR_RETURN_SAVE_MSG(has_location) \
+  do { \
+    if (simdjson_unlikely(err)) { \
+      dec->error_code = err; \
+      dec->error_line_number = __LINE__; \
+      save_errormsg_location(dec, doc, has_location); \
+      return NULL; \
+    } \
+  } while (0)
+
+
 SV * simdjson_decode(dec_t *dec) {
   SV *sv = NULL;
 
@@ -266,22 +282,17 @@ SV * simdjson_decode(dec_t *dec) {
   ondemand::document doc;
 
   auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
-  if (simdjson_unlikely(err)) {
-    dec->error_code = err;
-    save_errormsg_location(dec, doc, false);
-    return NULL;
-  }
+  ERROR_RETURN_SAVE_MSG(false);
 
   bool is_scalar = false;
   err = doc.is_scalar().get(is_scalar);
-  if (simdjson_unlikely(err)) {
-    dec->error_code = err;
-    save_errormsg_location(dec, doc, true);
-    return NULL;
-  }
+  ERROR_RETURN_SAVE_MSG(true);
+
   if (simdjson_unlikely(is_scalar)) {
     if (dec->path) {
       dec->error_code = SCALAR_DOCUMENT_AS_VALUE;
+      dec->error_line_number = __LINE__;
+      // handle error at end, don't parse anything
     } else {
       sv = recursive_parse_json<ondemand::document&>(dec, doc);
     }
@@ -289,11 +300,7 @@ SV * simdjson_decode(dec_t *dec) {
     ondemand::value val;
     if (dec->path) {
       err = doc.at_pointer(dec->path).get(val);
-      if (simdjson_unlikely(err)) {
-        dec->error_code = err;
-        save_errormsg_location(dec, doc, true);
-        return NULL;
-      }
+      ERROR_RETURN_SAVE_MSG(true);
     } else {
       doc.get_value().get(val);
     }
