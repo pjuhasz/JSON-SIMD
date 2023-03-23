@@ -206,7 +206,14 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
     {
       bool b = false;
       auto err = element.get_bool().get(b);
-      ERROR_RETURN;
+      if (err) {
+        // try to forge a more informative error message
+        auto str = get_raw_json_token_from(element);
+        if (str.size() && str[0]) {
+          err = (str[0] == 't') ? T_ATOM_ERROR : (str[0] == 'f') ? F_ATOM_ERROR : err;
+        }
+        ERROR_RETURN;
+      }
 
       res = newSVsv(b ? dec->json.v_true : dec->json.v_false);
       break;
@@ -215,8 +222,9 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
     bool is_null;
     auto err = element.is_null().get(is_null);
     if(simdjson_unlikely(!is_null || err)) {
-      // XXX Can we ever get here?
-      dec->error_code = err;
+      // we falsify the error, it would be either nothing or INCORRECT_TYPE, which is less informative
+      dec->error_code = N_ATOM_ERROR;
+      dec->error_line_number = __LINE__;
       return NULL;
     }
     res = newSVsv (&PL_sv_undef);
@@ -237,10 +245,10 @@ static void save_errormsg_location(dec_t *dec, ondemand::document& doc, bool val
     } else {
       dec->cur = const_cast<char*>(location);
     }
-    //std::cerr << "DEBUG error " << err_msg << " at line " << dec->error_line_number << " near " << location << std::endl;
+    //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " near " << location << std::endl;
   } else {
     dec->cur = SvEND(dec->input);
-    //std::cerr << "DEBUG error " << err_msg << " at line " << dec->error_line_number << " while parsing document" << std::endl;
+    //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " while parsing document" << std::endl;
   }
   dec->end = SvEND(dec->input);
 }
