@@ -21,3 +21,12 @@ ok (JSON::XS->new->allow_nonref (1)->decode ('"\u00fc"') eq "ü");
 ok (JSON::XS->new->allow_nonref (1)->decode ('"\ud801\udc02' . "\x{10204}\"") eq "\x{10402}\x{10204}");
 ok (JSON::XS->new->allow_nonref (1)->decode ('"\"\n\\\\\r\t\f\b"') eq "\"\012\\\015\011\014\010");
 
+eval { JSON::XS->new->use_simdjson (1)->allow_nonref (1)->utf8 (1)->decode ('"ü"') };
+ok $@ =~ /input is not valid UTF-8/;
+
+ok (JSON::XS->new->use_simdjson (1)->allow_nonref (1)->decode ('"ü"') eq "ü");
+ok (JSON::XS->new->use_simdjson (1)->allow_nonref (1)->decode ('"\u00fc"') eq "ü");
+ok (JSON::XS->new->use_simdjson (1)->allow_nonref (1)->decode ('"\ud801\udc02' . "\x{10204}\"") eq "\x{10402}\x{10204}");
+ok (JSON::XS->new->use_simdjson (1)->allow_nonref (1)->decode ('"\"\n\\\\\r\t\f\b"') eq "\"\012\\\015\011\014\010");
+
+
