@@ -1780,6 +1780,7 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
   if (dec.json.flags & F_USE_SIMDJSON) {
     dec.error_code = 0;
     dec.input = string;
+    dec.path = 0;
 
     // handle path
     if (path) {
