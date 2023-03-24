@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..76\n"; }
+BEGIN { $| = 1; print "1..91\n"; }
 
 use utf8;
 use Types::Serialiser;
@@ -58,3 +58,24 @@ ok (32768 == ((decode_json encode_json [32768])->[0]));
 my @sparse; @sparse[0,3] = (1, 4);
 ok ("[1,null,null,4]" eq encode_json \@sparse);
 
+
+ok (!defined JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('null'));
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('true') == 1);
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('false') == 0);
+
+$true  = JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('true');
+ok ($true eq 1);
+ok (Types::Serialiser::is_bool $true);
+$false = JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('false');
+ok ($false == !$true);
+ok (Types::Serialiser::is_bool $false);
+ok (++$false == 1);
+ok (!Types::Serialiser::is_bool $false);
+
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('5') == 5);
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('-5') == -5);
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('5e1') == 50);
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('-333e+0') == -333);
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('2.5') == 2.5);
+
+ok (JSON::XS->new->use_simdjson->allow_nonref (1)->decode ('""') eq "");

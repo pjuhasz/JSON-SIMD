@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..8\n"; }
+BEGIN { $| = 1; print "1..10\n"; }
 
 use utf8;
 use JSON::XS;
@@ -20,3 +20,7 @@ ok ('{"1":2}' eq encode_json $json->decode ('{"1":2,}'));
 ok (!eval { $json->decode ('{,}') });
 
 ok ('[1,2]' eq encode_json $json->decode ("[1#,2\n ,2,#  ]  \n\t]"));
+
+
+ok (!eval { my $simdjson = JSON::XS->new->relaxed->use_simdjson; });
+ok (!eval { my $simdjson = JSON::XS->new->use_simdjson->relaxed; });
