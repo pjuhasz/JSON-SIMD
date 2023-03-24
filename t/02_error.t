@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..35\n"; }
+BEGIN { $| = 1; print "1..58\n"; }
 
 use utf8;
 use JSON::XS;
