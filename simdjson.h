@@ -1,4 +1,4 @@
-/* auto-generated on 2023-03-09 11:14:42 -0500. Do not edit! */
+/* auto-generated on 2023-03-24 12:44:18 -0400. Do not edit! */
 /* begin file include/simdjson.h */
 #ifndef SIMDJSON_H
 #define SIMDJSON_H
@@ -43,7 +43,7 @@
 #define SIMDJSON_SIMDJSON_VERSION_H
 
 /** The version of simdjson being used (major.minor.revision) */
-#define SIMDJSON_VERSION "3.1.5"
+#define SIMDJSON_VERSION "3.1.6"
 
 namespace simdjson {
 enum {
@@ -58,7 +58,7 @@ enum {
   /**
    * The revision (major.minor.REVISION) of simdjson being used.
    */
-  SIMDJSON_VERSION_REVISION = 5
+  SIMDJSON_VERSION_REVISION = 6
 };
 } // namespace simdjson
 
@@ -263,6 +263,19 @@ use a 64-bit target such as x64, 64-bit ARM or 64-bit PPC.")
 #define SIMDJSON_NO_SANITIZE_UNDEFINED __attribute__((no_sanitize_undefined))
 #else
 #define SIMDJSON_NO_SANITIZE_UNDEFINED
+#endif
+
+
+#if defined(__clang__) || defined(__GNUC__)
+#if defined(__has_feature)
+#  if __has_feature(memory_sanitizer)
+#define SIMDJSON_NO_SANITIZE_MEMORY __attribute__((no_sanitize("memory")))
+#  endif // if __has_feature(memory_sanitizer)
+#endif // defined(__has_feature)
+#endif
+// make sure it is defined as 'nothing' if it is unapplicable.
+#ifndef SIMDJSON_NO_SANITIZE_MEMORY
+#define SIMDJSON_NO_SANITIZE_MEMORY
 #endif
 
 #if SIMDJSON_VISUAL_STUDIO
@@ -3808,9 +3821,8 @@ inline char *allocate_padded_buffer(size_t length) noexcept {
   if (padded_buffer == nullptr) {
     return nullptr;
   }
-  // We write zeroes in the padded region to avoid having uninitized
-  // garbage. If nothing else, garbage getting read might trigger a
-  // warning in a memory checking.
+  // We write nulls in the padded region to avoid having uninitialized
+  // content which may trigger warning for some sanitizers
   std::memset(padded_buffer + length, 0, totalpaddedlength - length);
   return padded_buffer;
 } // allocate_padded_buffer()
@@ -3840,7 +3852,7 @@ inline padded_string::padded_string(std::string_view sv_) noexcept
     : viable_size(sv_.size()), data_ptr(internal::allocate_padded_buffer(sv_.size())) {
   if(simdjson_unlikely(!data_ptr)) {
     //allocation failed or zero size
-    viable_size=0;
+    viable_size = 0;
     return;
   }
   if (sv_.size()) {
@@ -8896,7 +8908,7 @@ inline error_code parser::ensure_capacity(document& target_document, size_t desi
 }
 
 simdjson_inline void parser::set_max_capacity(size_t max_capacity) noexcept {
-  if(max_capacity < MINIMAL_DOCUMENT_CAPACITY) {
+  if(max_capacity > MINIMAL_DOCUMENT_CAPACITY) {
     _max_capacity = max_capacity;
   } else {
     _max_capacity = MINIMAL_DOCUMENT_CAPACITY;
@@ -9845,6 +9857,10 @@ namespace {
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 SIMDJSON_NO_SANITIZE_UNDEFINED
+// This function can be used safely even if not all bytes have been
+// initialized.
+// See issue https://github.com/simdjson/simdjson/issues/1965
+SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
 #ifdef SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long ret;
@@ -13956,6 +13972,10 @@ namespace {
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 SIMDJSON_NO_SANITIZE_UNDEFINED
+// This function can be used safely even if not all bytes have been
+// initialized.
+// See issue https://github.com/simdjson/simdjson/issues/1965
+SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
 #if SIMDJSON_REGULAR_VISUAL_STUDIO
   return (int)_tzcnt_u64(input_num);
@@ -16146,6 +16166,10 @@ namespace {
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 SIMDJSON_NO_SANITIZE_UNDEFINED
+// This function can be used safely even if not all bytes have been
+// initialized.
+// See issue https://github.com/simdjson/simdjson/issues/1965
+SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
 #if SIMDJSON_REGULAR_VISUAL_STUDIO
   return (int)_tzcnt_u64(input_num);
@@ -18292,6 +18316,10 @@ namespace {
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 SIMDJSON_NO_SANITIZE_UNDEFINED
+// This function can be used safely even if not all bytes have been
+// initialized.
+// See issue https://github.com/simdjson/simdjson/issues/1965
+SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
 #if SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long ret;
@@ -20609,6 +20637,10 @@ namespace {
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 SIMDJSON_NO_SANITIZE_UNDEFINED
+// This function can be used safely even if not all bytes have been
+// initialized.
+// See issue https://github.com/simdjson/simdjson/issues/1965
+SIMDJSON_NO_SANITIZE_MEMORY
 simdjson_inline int trailing_zeroes(uint64_t input_num) {
 #if SIMDJSON_REGULAR_VISUAL_STUDIO
   unsigned long ret;
@@ -23718,7 +23750,14 @@ public:
    * @error TAPE_ERROR if there is no matching } at end of document
    */
   simdjson_warn_unused simdjson_inline simdjson_result<bool> start_root_object() noexcept;
-
+  /**
+   * Checks whether an object could be started from the root. May be called by start_root_object.
+   *
+   * @returns SUCCESS if it is possible to safely start an object from the root (document level).
+   * @error INCORRECT_TYPE if there is no opening {
+   * @error TAPE_ERROR if there is no matching } at end of document
+   */
+  simdjson_warn_unused simdjson_inline error_code check_root_object() noexcept;
   /**
    * Start an object iteration after the user has already checked and moved past the {.
    *
@@ -23843,7 +23882,14 @@ public:
    * @error TAPE_ERROR if there is no matching ] at end of document
    */
   simdjson_warn_unused simdjson_inline simdjson_result<bool> start_root_array() noexcept;
-
+  /**
+   * Checks whether an array could be started from the root. May be called by start_root_array.
+   *
+   * @returns SUCCESS if it is possible to safely start an array from the root (document level).
+   * @error INCORRECT_TYPE If there is no [.
+   * @error TAPE_ERROR if there is no matching ] at end of document
+   */
+  simdjson_warn_unused simdjson_inline error_code check_root_array() noexcept;
   /**
    * Start an array iteration, after the user has already checked and moved past the [.
    *
@@ -28094,7 +28140,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::start
   return true;
 }
 
-simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::started_root_object() noexcept {
+simdjson_warn_unused simdjson_inline error_code value_iterator::check_root_object() noexcept {
   // When in streaming mode, we cannot expect peek_last() to be the last structural element of the
   // current document. It only works in the normal mode where we have indexed a single document.
   // Note that adding a check for 'streaming' is not expensive since we only have at most
@@ -28116,6 +28162,12 @@ simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::start
       return report_error(INCOMPLETE_ARRAY_OR_OBJECT, "the document is unbalanced");
     }
   }
+  return SUCCESS;
+}
+
+simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::started_root_object() noexcept {
+  auto error = check_root_object();
+  if(error) { return error; }
   return started_object();
 }
 
@@ -28479,7 +28531,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::start
   return true;
 }
 
-simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::started_root_array() noexcept {
+simdjson_warn_unused simdjson_inline error_code value_iterator::check_root_array() noexcept {
   // When in streaming mode, we cannot expect peek_last() to be the last structural element of the
   // current document. It only works in the normal mode where we have indexed a single document.
   // Note that adding a check for 'streaming' is not expensive since we only have at most
@@ -28501,6 +28553,12 @@ simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::start
       return report_error(INCOMPLETE_ARRAY_OR_OBJECT, "the document is unbalanced");
     }
   }
+  return SUCCESS;
+}
+
+simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::started_root_array() noexcept {
+  auto error = check_root_array();
+  if (error) { return error; }
   return started_array();
 }
 
@@ -29529,14 +29587,22 @@ simdjson_inline simdjson_result<value> document::get_value() noexcept {
   // gets called.
   iter.assert_at_document_depth();
   switch (*iter.peek()) {
-    case '[':
-    case '{':
+    case '[': {
+      auto value_iterator = get_root_value_iterator();
+      auto error = value_iterator.check_root_array();
+      if(error) { return error; }
       return value(get_root_value_iterator());
+    }
+    case '{': {
+      auto value_iterator = get_root_value_iterator();
+      auto error = value_iterator.check_root_object();
+      if(error) { return error; }
+      return value(get_root_value_iterator());
+    }
     default:
       // Unfortunately, scalar documents are a special case in simdjson and they cannot
       // be safely converted to value instances.
       return SCALAR_DOCUMENT_AS_VALUE;
-      // return value(get_root_value_iterator());
   }
 }
 simdjson_inline simdjson_result<array> document::get_array() & noexcept {

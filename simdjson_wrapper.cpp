@@ -302,7 +302,8 @@ SV * simdjson_decode(dec_t *dec) {
       err = doc.at_pointer(dec->path).get(val);
       ERROR_RETURN_SAVE_MSG(true);
     } else {
-      doc.get_value().get(val);
+      err = doc.get_value().get(val);
+      ERROR_RETURN_SAVE_MSG(true);
     }
     sv = recursive_parse_json<ondemand::value>(dec, val);
   }
