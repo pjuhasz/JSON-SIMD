@@ -2334,6 +2334,17 @@ void incr_parse (JSON *self, SV *jsonstr = 0)
                     }
                 }
 
+              // manually consume trailing whitespace, to work around simdjson
+              if (self->flags & F_USE_SIMDJSON)
+                {
+                  char *p = SvPVX (self->incr_text) + self->incr_pos;
+                  while (p && (*p == 0x20 || *p == 0x0a ||*p == 0x0d || *p == 0x09))
+                    {
+                      p++;
+                      self->incr_pos++;
+                    }
+                }
+
               PUTBACK; sv = decode_json (self->incr_text, self, &offset, 0); SPAGAIN;
               XPUSHs (sv);
 
