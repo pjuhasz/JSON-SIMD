@@ -71,6 +71,15 @@ static bool validate_large_number(std::string_view& s) {
     } \
   } while (0)
 
+#define ERROR_RETURN_IF(expected_err) \
+  do { \
+    if (simdjson_unlikely(err == expected_err)) { \
+      dec->error_code = err; \
+      dec->error_line_number = __LINE__; \
+      return NULL; \
+    } \
+  } while (0)
+
 #define ERROR_RETURN_CLEANUP(var) \
   do { \
     if (simdjson_unlikely(err)) { \
@@ -178,6 +187,9 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
       ondemand::number num;
       auto err = element.get_number().get(num);
       if (simdjson_unlikely(err)) {
+        // for scalar documents it can detect trailing content
+        ERROR_RETURN_IF(TRAILING_CONTENT);
+
         // handle case of large numbers:
         // we save it as a string, but try to validate if it looks like a number at least
         auto str = get_raw_json_token_from(element);
@@ -236,6 +248,9 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
       bool b = false;
       auto err = element.get_bool().get(b);
       if (err) {
+        // for scalar documents it can detect trailing content
+        ERROR_RETURN_IF(TRAILING_CONTENT);
+
         // try to forge a more informative error message
         auto str = get_raw_json_token_from(element);
         if (str.size() && str[0]) {
@@ -254,6 +269,9 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
       // we falsify the error, it would be either nothing or INCORRECT_TYPE, which is less informative
       if (err == 0 || err == INCORRECT_TYPE) {
         dec->error_code = N_ATOM_ERROR;
+      } else {
+        // for scalar documents it can detect trailing content
+        dec->error_code = err;
       }
       dec->error_line_number = __LINE__;
       return NULL;
@@ -264,23 +282,27 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
   return res;
 }
 
-static void save_errormsg_location(dec_t *dec, ondemand::document& doc, bool valid_location) {
+static char *get_location(ondemand::document& doc) {
+  const char *location = NULL;
+  auto err = doc.current_location().get(location);
+  if (err) { // out of bounds, i.e. end of document
+    return NULL;
+  } else {
+    return const_cast<char*>(location);
+  }
+}
+
+static void save_errormsg_location(dec_t *dec, char *location) {
   if (dec->error_code) {
     dec->err = error_message((simdjson::error_code)dec->error_code);
   }
-  if (valid_location) {
-    const char *location = NULL;
-    auto err = doc.current_location().get(location);
-    if (err) { // out of bounds, i.e. end of document
-      dec->cur = SvEND(dec->input);
-    } else {
-      dec->cur = const_cast<char*>(location);
-    }
-    //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " near " << dec->cur << std::endl;
+  if (location) {
+    dec->cur = location;
   } else {
     dec->cur = SvEND(dec->input);
-    //std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " while parsing document" << std::endl;
   }
+  // std::cerr << "DEBUG error " << dec->err << " at line " << dec->error_line_number << " near " << dec->cur << std::endl;
+
   dec->end = SvEND(dec->input);
 }
 
@@ -288,12 +310,12 @@ simdjson_parser_t simdjson_init() {
   return new ondemand::parser;
 }
 
-#define ERROR_RETURN_SAVE_MSG(has_location) \
+#define ERROR_RETURN_SAVE_MSG \
   do { \
     if (simdjson_unlikely(err)) { \
       dec->error_code = err; \
       dec->error_line_number = __LINE__; \
-      save_errormsg_location(dec, doc, has_location); \
+      save_errormsg_location(dec, location); \
       return NULL; \
     } \
   } while (0)
@@ -306,13 +328,14 @@ SV * simdjson_decode(dec_t *dec) {
 
   ondemand::parser* parser = static_cast<ondemand::parser*>(dec->json.simdjson);
   ondemand::document doc;
+  char *location = NULL;
 
   auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
-  ERROR_RETURN_SAVE_MSG(false);
+  ERROR_RETURN_SAVE_MSG;
 
   bool is_scalar = false;
   err = doc.is_scalar().get(is_scalar);
-  ERROR_RETURN_SAVE_MSG(true);
+  ERROR_RETURN_SAVE_MSG;
 
   if (simdjson_unlikely(is_scalar)) {
     if (dec->path) {
@@ -321,19 +344,53 @@ SV * simdjson_decode(dec_t *dec) {
       // handle error at end, don't parse anything
     } else {
       sv = recursive_parse_json<ondemand::document&>(dec, doc);
+      // for scalar documents it can detect trailing content,
+      // so try to re-parse
+      if (dec->error_code == TRAILING_CONTENT) {
+        // TODO  
+      }
     }
   } else {
     ondemand::value val;
     if (dec->path) {
       err = doc.at_pointer(dec->path).get(val);
-      ERROR_RETURN_SAVE_MSG(true);
     } else {
       err = doc.get_value().get(val);
-      ERROR_RETURN_SAVE_MSG(true);
     }
-    sv = recursive_parse_json<ondemand::value>(dec, val);
+    if (simdjson_unlikely(err == INCOMPLETE_ARRAY_OR_OBJECT)) {
+      // desperate, gnarly hack:
+      // simdjson is broken by design, because parse.iterate (at least in on demand mode)
+      // can not distinguish between an incomplete document and a valid document w trailing garbage.
+      // So try to re-parse with iterate-many to decide.
+      ondemand::document_stream stream;
+      auto err = parser->iterate_many(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(stream);
+      ERROR_RETURN_SAVE_MSG;
+
+      ondemand::document_reference doc_ref;
+      auto iter = stream.begin();
+      err = (*iter).get(doc_ref);
+      if (err == EMPTY) {
+        // iterate_many hasn't found a valid document, so we go with truncated
+        err = INCOMPLETE_ARRAY_OR_OBJECT;
+        ERROR_RETURN_SAVE_MSG;
+      }
+      if (dec->path) {
+        err = doc_ref.at_pointer(dec->path).get(val);
+      } else {
+        err = doc_ref.get_value().get(val);
+      }
+      ERROR_RETURN_SAVE_MSG;
+
+      sv = recursive_parse_json<ondemand::value>(dec, val);
+      location = get_location(doc_ref);
+    } else {
+      ERROR_RETURN_SAVE_MSG;
+
+      sv = recursive_parse_json<ondemand::value>(dec, val);
+      location = get_location(doc);
+    }
   }
-  save_errormsg_location(dec, doc, true);
+  save_errormsg_location(dec, location);
   return sv;
 }
 

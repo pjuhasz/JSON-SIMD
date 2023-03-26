@@ -94,7 +94,7 @@ splitter +JSON::XS->new->use_simdjson(1)                  , ' 0.00E+00 ';
    
    ok (!$res, "unbalanced bracket");
    ok ($e, "got error");
-   like ($e, qr/malformed/, "malformed json string error");
+   like ($e, qr/improper structure/, "malformed json string error");
    
    $coder->incr_skip;
    
