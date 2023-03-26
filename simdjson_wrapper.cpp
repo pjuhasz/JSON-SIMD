@@ -143,7 +143,8 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         NULL_RETURN_CLEANUP(sv_value, hv);
 
         // perlapi: If klen is negative the key is assumed to be in UTF-8-encoded Unicode
-        hv_store (hv, key.data(), -key.size(), sv_value, 0);
+        // FIXME but it is very slow with -key.size() :(((
+        hv_store (hv, key.data(), key.size(), sv_value, 0);
       }
 
       DEC_DEC_DEPTH;
