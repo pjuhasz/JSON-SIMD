@@ -1391,6 +1391,77 @@ fail:
   return 0;
 }
 
+// not static because we call it from simdjson too
+SV *
+filter_object (dec_t *dec, SV *sv, HV* hv)
+{
+  if (dec->json.cb_sk_object && HvKEYS (hv) == 1)
+    {
+      HE *cb, *he;
+
+      hv_iterinit (hv);
+      he = hv_iternext (hv);
+      hv_iterinit (hv);
+
+      // the next line creates a mortal sv each time it's called.
+      // might want to optimise this for common cases.
+      cb = hv_fetch_ent (dec->json.cb_sk_object, hv_iterkeysv (he), 0, 0);
+
+      if (cb)
+        {
+          dSP;
+          int count;
+
+          ENTER; SAVETMPS;
+          PUSHMARK (SP);
+          XPUSHs (HeVAL (he));
+          sv_2mortal (sv);
+
+          PUTBACK; count = call_sv (HeVAL (cb), G_ARRAY); SPAGAIN;
+
+          if (count == 1)
+            {
+              sv = newSVsv (POPs);
+              PUTBACK;
+              FREETMPS; LEAVE;
+              return sv;
+            }
+          else if (count)
+            croak ("filter_json_single_key_object callbacks must not return more than one scalar");
+
+          PUTBACK;
+
+          SvREFCNT_inc (sv);
+
+          FREETMPS; LEAVE;
+        }
+    }
+
+  if (dec->json.cb_object)
+    {
+      dSP;
+      int count;
+
+      ENTER; SAVETMPS;
+      PUSHMARK (SP);
+      XPUSHs (sv_2mortal (sv));
+
+      PUTBACK; count = call_sv (dec->json.cb_object, G_ARRAY); SPAGAIN;
+
+      if (count == 1)
+        sv = newSVsv (POPs);
+      else if (count == 0)
+        SvREFCNT_inc (sv);
+      else
+        croak ("filter_json_object callbacks must not return more than one scalar");
+
+      PUTBACK;
+
+      FREETMPS; LEAVE;
+    }
+  return sv;
+}
+
 static SV *
 decode_hv (dec_t *dec)
 {
@@ -1492,72 +1563,7 @@ decode_hv (dec_t *dec)
 
   // check filter callbacks
   if (expect_false (dec->json.flags & F_HOOK))
-    {
-      if (dec->json.cb_sk_object && HvKEYS (hv) == 1)
-        {
-          HE *cb, *he;
-
-          hv_iterinit (hv);
-          he = hv_iternext (hv);
-          hv_iterinit (hv);
-
-          // the next line creates a mortal sv each time it's called.
-          // might want to optimise this for common cases.
-          cb = hv_fetch_ent (dec->json.cb_sk_object, hv_iterkeysv (he), 0, 0);
-
-          if (cb)
-            {
-              dSP;
-              int count;
-
-              ENTER; SAVETMPS;
-              PUSHMARK (SP);
-              XPUSHs (HeVAL (he));
-              sv_2mortal (sv);
-
-              PUTBACK; count = call_sv (HeVAL (cb), G_ARRAY); SPAGAIN;
-
-              if (count == 1)
-                {
-                  sv = newSVsv (POPs);
-                  PUTBACK;
-                  FREETMPS; LEAVE;
-                  return sv;
-                }
-              else if (count)
-                croak ("filter_json_single_key_object callbacks must not return more than one scalar");
-
-              PUTBACK;
-
-              SvREFCNT_inc (sv);
-
-              FREETMPS; LEAVE;
-            }
-        }
-
-      if (dec->json.cb_object)
-        {
-          dSP;
-          int count;
-
-          ENTER; SAVETMPS;
-          PUSHMARK (SP);
-          XPUSHs (sv_2mortal (sv));
-
-          PUTBACK; count = call_sv (dec->json.cb_object, G_ARRAY); SPAGAIN;
-
-          if (count == 1)
-            sv = newSVsv (POPs);
-          else if (count == 0)
-            SvREFCNT_inc (sv);
-          else
-            croak ("filter_json_object callbacks must not return more than one scalar");
-
-          PUTBACK;
-
-          FREETMPS; LEAVE;
-        }
-    }
+    sv = filter_object(dec, sv, hv);
 
   return sv;
 

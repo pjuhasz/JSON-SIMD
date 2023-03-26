@@ -89,6 +89,8 @@ static bool validate_large_number(std::string_view& s) {
     } \
   } while (0)
 
+// XXX keep in sync w XS.xs
+#define F_HOOK           0x00080000UL // some hooks exist, so slow-path processing
 
 template<typename T>
 static SV* recursive_parse_json(dec_t *dec, T element) {
@@ -146,6 +148,11 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
 
       DEC_DEC_DEPTH;
       res = newRV_noinc ((SV *)hv);
+
+      if (simdjson_unlikely(dec->json.flags & F_HOOK)) {
+        res = filter_object(dec, res, hv);
+      }
+
       break;
     }
   case ondemand::json_type::number:

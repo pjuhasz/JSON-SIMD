@@ -51,6 +51,10 @@ typedef struct
   int error_line_number; // for debug purposes
 } dec_t;
 
+// needed by both decoders
+SV * filter_object (dec_t *dec, SV *sv, HV* hv);
+
+// actual interface to simdjson decoder
 simdjson_parser_t simdjson_init();
 void simdjson_destroy(simdjson_parser_t self);
 SV* simdjson_decode(dec_t *dec);
