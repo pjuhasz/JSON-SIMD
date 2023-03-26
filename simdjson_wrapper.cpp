@@ -142,9 +142,26 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         SV *sv_value = recursive_parse_json(dec, val);
         NULL_RETURN_CLEANUP(sv_value, hv);
 
-        // perlapi: If klen is negative the key is assumed to be in UTF-8-encoded Unicode
-        // FIXME but it is very slow with -key.size() :(((
-        hv_store (hv, key.data(), key.size(), sv_value, 0);
+        // simdjson always returns the key as an UTF-8-encoded string
+        // (it has already checked and unescaped it).
+        // However, for Perl hash keys we have to specify whether they are UTF-8.
+        // If yes, we have to supply a negative size argument.
+        // This is necessary to avoid double-encoded mojibake keys.
+        // The downside: UTF-8 keys are terribly slow, they are reallocated,
+        // scanned and downgraded in a very inefficient way.
+        // Always passing the key as UTF-8 would in fact eat all the speedups we would gain by using simdjson.
+        // Most real-life hash keys are expected to be short ASCII strings,
+        // so we try to salvage the situation by scanning the key for non-ASCII characters
+        // and pass the key as UTF-8 only when necessary.
+        // TODO: use simdutf8
+        int size = key.size();
+        for (unsigned long int i = 0; i < key.size(); i++) {
+          if ((unsigned char)key[i] >= 0x80) {
+            size = -size;
+            break;
+          }
+        }
+        hv_store (hv, key.data(), size, sv_value, 0);
       }
 
       DEC_DEC_DEPTH;
