@@ -347,7 +347,21 @@ SV * simdjson_decode(dec_t *dec) {
       // for scalar documents it can detect trailing content,
       // so try to re-parse
       if (dec->error_code == TRAILING_CONTENT) {
-        // TODO  
+		  std::cerr << "lofasz" << std::endl;
+        dec->error_code = 0;
+        dec->error_line_number = 0;
+        ondemand::document_stream stream;
+        auto err = parser->iterate_many(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(stream);
+        ERROR_RETURN_SAVE_MSG;
+
+        ondemand::document_reference doc_ref;
+        auto iter = stream.begin();
+        err = (*iter).get(doc_ref);
+        ERROR_RETURN_SAVE_MSG;
+        sv = recursive_parse_json<ondemand::document&>(dec, doc_ref);
+        location = get_location(doc_ref);
+      } else {
+        location = get_location(doc);
       }
     }
   } else {
@@ -383,6 +397,14 @@ SV * simdjson_decode(dec_t *dec) {
 
       sv = recursive_parse_json<ondemand::value>(dec, val);
       location = get_location(doc_ref);
+
+      // doc_ref.current_location may be null
+      // (if we parsed a complete first document, and the trailing garbage looks like a (partial) valid document)
+      // so we need to ask the stream
+      if (location == NULL) {
+        location = SvEND(dec->input) - stream.truncated_bytes();
+      }
+
     } else {
       ERROR_RETURN_SAVE_MSG;
 

@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..28\n"; }
+BEGIN { $| = 1; print "1..65\n"; }
 
 use utf8;
 use JSON::XS;
@@ -12,16 +12,30 @@ sub ok($) {
 
 # more tests with trailing garbage
 for (
-    [ q/[1, 2] foo/,      'garbage', 7],
-    [ q/[1, 2] foo ]/,    'garbage', 7],
-    [ q/[1, 2] foo ] /,   'garbage', 7],
-    [ q/[1, 2] foo }/,    'garbage', 7],
-    [ q/[1, 2} foo ]/,    'improper structure', 7],
-    [ q/{"1": 2} foo/,    'garbage', 9],
-    [ q/{"1": 2} foo }/,  'garbage', 9],
-    [ q/{"1": 2} foo } /, 'garbage', 9],
-    [ q/{"1": 2} foo ]/,  'garbage', 9],
-    [ q/{"1": 2] foo }/,  'improper structure', 9],
+    [ q/"a" foo/,           'garbage', 3],
+    [ q/111 foo/,           'garbage', 3],
+    [ q/true foo/,          'garbage', 4],
+    [ q/false foo/,         'garbage', 5],
+    [ q/null foo/,          'garbage', 4],
+    [ q/[1, 2] foo/,        'garbage', 7],
+    [ q/[1, 2] foo ]/,      'garbage', 7],
+    [ q/[1, 2] foo ] /,     'garbage', 7],
+    [ q/[1, 2] foo }/,      'garbage', 7],
+    [ q/[1, 2} foo ]/,      'improper structure', 7],
+    [ q/[1, 2] [3]/,        'garbage', 7],
+    [ q/[1, 2] [/,          'garbage', 7],
+    [ q/[1, 2] 111/,        'garbage', 7],
+    [ q/[1, 2] "str"/,      'garbage', 7],
+    [ q/{"1": 2} foo/,      'garbage', 9],
+    [ q/{"1": 2} foo }/,    'garbage', 9],
+    [ q/{"1": 2} foo } /,   'garbage', 9],
+    [ q/{"1": 2} foo ]/,    'garbage', 9],
+    [ q/{"1": 2] foo }/,    'improper structure', 9],
+    [ q/{"1": 2} {"3": 4}/, 'garbage', 9],
+    [ q/{"1": 2} {/,        'garbage', 9],
+    [ q/{"1": 2} 111/,      'garbage', 9],
+    [ q/{"1": 2} "str"/,    'garbage', 9],
+
 ) {
     my ($json, $error, $offset) = @$_;
     my $got_offset; 
