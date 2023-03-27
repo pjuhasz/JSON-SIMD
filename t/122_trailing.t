@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..65\n"; }
+BEGIN { $| = 1; print "1..68\n"; }
 
 use utf8;
 use JSON::XS;
@@ -11,8 +11,11 @@ sub ok($) {
 }
 
 # more tests with trailing garbage
+# the good old legacy parser naturally and trivially detects all these cases correctly,
+# however, with simdjson we have to test the various dodgy workarounds :(
 for (
     [ q/"a" foo/,           'garbage', 3],
+    [ q/"a" "b"/,           'garbage', 3],
     [ q/111 foo/,           'garbage', 3],
     [ q/true foo/,          'garbage', 4],
     [ q/false foo/,         'garbage', 5],

@@ -338,28 +338,20 @@ SV * simdjson_decode(dec_t *dec) {
   ERROR_RETURN_SAVE_MSG;
 
   if (simdjson_unlikely(is_scalar)) {
-    if (dec->path) {
-      dec->error_code = SCALAR_DOCUMENT_AS_VALUE;
+    if (dec->path && *(dec->path)) {
+      // don't parse anything, non-root path doesn't make sense with scalar values
+      dec->error_code = INVALID_JSON_POINTER;
       dec->error_line_number = __LINE__;
-      // handle error at end, don't parse anything
+      ERROR_RETURN_SAVE_MSG;
     } else {
       sv = recursive_parse_json<ondemand::document&>(dec, doc);
-      // for scalar documents it can detect trailing content,
-      // so try to re-parse
+      // For scalar documents it can detect trailing content,
+      // but re-parsing the content with iterate_many doesn't work for some reason,
+      // and even if it worked, there are cases where iterate_many fails (e.g. '1111 }', it says empty json (as of simdjson 3.1.6).
+      // So we have to find the end of the valid content ourselves and re-parse a truncated document
       if (dec->error_code == TRAILING_CONTENT) {
-		  std::cerr << "lofasz" << std::endl;
-        dec->error_code = 0;
-        dec->error_line_number = 0;
-        ondemand::document_stream stream;
-        auto err = parser->iterate_many(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(stream);
-        ERROR_RETURN_SAVE_MSG;
-
-        ondemand::document_reference doc_ref;
-        auto iter = stream.begin();
-        err = (*iter).get(doc_ref);
-        ERROR_RETURN_SAVE_MSG;
-        sv = recursive_parse_json<ondemand::document&>(dec, doc_ref);
-        location = get_location(doc_ref);
+        // TODO
+        location = get_location(doc);
       } else {
         location = get_location(doc);
       }
