@@ -20,6 +20,6 @@ WriteMakefile(
     OBJECT => '$(O_FILES)',
     LD => 'g++',
     OPTIMIZE => '-O3',
-    CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0",
+    CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG",
 );
 
