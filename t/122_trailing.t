@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..68\n"; }
+BEGIN { $| = 1; print "1..74\n"; }
 
 use utf8;
 use JSON::XS;
@@ -17,6 +17,8 @@ for (
     [ q/"a" foo/,           'garbage', 3],
     [ q/"a" "b"/,           'garbage', 3],
     [ q/111 foo/,           'garbage', 3],
+    [ q/111{/,              'garbage', 3],
+    [ q/111}/,              'garbage', 3],
     [ q/true foo/,          'garbage', 4],
     [ q/false foo/,         'garbage', 5],
     [ q/null foo/,          'garbage', 4],
@@ -50,7 +52,7 @@ for (
     if ($error eq 'garbage') {
         ok !$@
             or warn "# $json   $@";;
-        ok $offset == $got_offset if $error eq 'garbage'
-            or warn "# $json   $@";
+        ok($offset == $got_offset)
+            or warn "# $json   $offset != $got_offset";
     }
 }

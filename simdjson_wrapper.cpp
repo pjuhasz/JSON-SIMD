@@ -282,6 +282,50 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
   return res;
 }
 
+// Try to find the end of a potentially valid scalar value that is followed by trailing garbage, clumsily and slowly.
+// This should be a rare special case.
+static size_t find_end_of_scalar(char *s) {
+  if (!s) {
+    return 0;
+  }
+  char *start = s;
+  while (*s == 0x20 || *s == 0x0d ||*s == 0x0a ||*s == 0x09) {
+    s++;
+  }
+
+  bool in_quotes = false;
+  bool in_escape = false;
+  while (*s) {
+    switch (*s) {
+      case '\\':
+        in_escape = !in_escape;
+        break;
+      case '"':
+        if (in_escape) {
+          in_escape = false;
+        } else {
+          in_quotes = !in_quotes;
+        }
+        break;
+      case 0x20:
+      case 0x0d:
+      case 0x0a:
+      case 0x09:
+      case '}':
+      case '{':
+      case '[':
+      case ']':
+        if (!in_quotes) {
+            return s - start;
+        }
+        break;
+      default: if (in_escape) { in_escape = false; }
+    }
+    s++;
+  }
+  return s - start;
+}
+
 static char *get_location(ondemand::document& doc) {
   const char *location = NULL;
   auto err = doc.current_location().get(location);
@@ -348,10 +392,16 @@ SV * simdjson_decode(dec_t *dec) {
       // For scalar documents it can detect trailing content,
       // but re-parsing the content with iterate_many doesn't work for some reason,
       // and even if it worked, there are cases where iterate_many fails (e.g. '1111 }', it says empty json (as of simdjson 3.1.6).
-      // So we have to find the end of the valid content ourselves and re-parse a truncated document
+      // So we have to find the end of the valid content ourselves and re-parse a truncated document, yet another desperate hack.
       if (dec->error_code == TRAILING_CONTENT) {
-        // TODO
-        location = get_location(doc);
+        ondemand::document doc2;
+        size_t size = find_end_of_scalar(SvPVX(dec->input));
+
+        err = parser->iterate(SvPVX(dec->input), size, SvLEN(dec->input)).get(doc2);
+        ERROR_RETURN_SAVE_MSG;
+        sv = recursive_parse_json<ondemand::document&>(dec, doc2);
+        location = SvPVX(dec->input) + size;
+
       } else {
         location = get_location(doc);
       }
