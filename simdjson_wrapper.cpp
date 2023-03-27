@@ -17,7 +17,7 @@ static std::string_view get_raw_json_token_from(ondemand::value val) {
 
 // Check if it matches /[+-]?[1-9][0-9]*\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly.
 // This should be a rare special case.
-static bool validate_large_number(std::string_view& s) {
+static inline bool validate_large_number(std::string_view& s) {
   if (s.size() == 0)
     return false;
 
@@ -50,6 +50,26 @@ static bool validate_large_number(std::string_view& s) {
     }
   }
   return true;
+}
+
+// taken from simdutf8
+static inline bool validate_ascii(const char *buf, size_t len) noexcept {
+    const uint8_t *data = reinterpret_cast<const uint8_t *>(buf);
+    uint64_t pos = 0;
+    // process in blocks of 16 bytes when possible
+    for (;pos + 16 < len; pos += 16) {
+        uint64_t v1;
+        std::memcpy(&v1, data + pos, sizeof(uint64_t));
+        uint64_t v2;
+        std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
+        uint64_t v{v1 | v2};
+        if ((v & 0x8080808080808080) != 0) { return false; }
+    }
+    // process the tail byte-by-byte
+    for (;pos < len; pos ++) {
+        if (data[pos] >= 0b10000000) { return false; }
+    }
+    return true;
 }
 
 #define DEC_INC_DEPTH \
@@ -163,14 +183,11 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         // so we try to salvage the situation by scanning the key for non-ASCII characters
         // and pass the key as UTF-8 only when necessary.
         // TODO: use simdutf8
-        int size = key.size();
-        for (unsigned long int i = 0; i < key.size(); i++) {
-          if ((unsigned char)key[i] >= 0x80) {
-            size = -size;
-            break;
-          }
+         if (validate_ascii(key.data(), key.size())) {
+          hv_store (hv, key.data(), key.size(), sv_value, 0);
+        } else {
+          hv_store (hv, key.data(), -key.size(), sv_value, 0);
         }
-        hv_store (hv, key.data(), size, sv_value, 0);
       }
 
       DEC_DEC_DEPTH;
