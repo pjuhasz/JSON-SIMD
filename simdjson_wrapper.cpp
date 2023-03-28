@@ -182,7 +182,6 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         // Most real-life hash keys are expected to be short ASCII strings,
         // so we try to salvage the situation by scanning the key for non-ASCII characters
         // and pass the key as UTF-8 only when necessary.
-        // TODO: use simdutf8
          if (validate_ascii(key.data(), key.size())) {
           hv_store (hv, key.data(), key.size(), sv_value, 0);
         } else {
