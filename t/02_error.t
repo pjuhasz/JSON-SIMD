@@ -73,7 +73,7 @@ eval { JSON::XS->new->use_simdjson(1)->decode ('[5') }; ok $@ =~ /JSON document 
 eval { JSON::XS->new->use_simdjson(1)->decode ('{"5"') }; ok $@ =~ /JSON document ended early/;
 eval { JSON::XS->new->use_simdjson(1)->decode ('{"5":null') }; ok $@ =~ /JSON document ended early/;
 
-eval { JSON::XS->new->use_simdjson(1)->decode (undef) }; ok $@ =~ /Empty/;
+eval { JSON::XS->new->use_simdjson(1)->decode (undef) }; ok $@ =~ /no JSON found/;
 eval { JSON::XS->new->use_simdjson(1)->decode (\5) }; ok !!$@; # Can't coerce readonly
 eval { JSON::XS->new->use_simdjson(1)->decode ([]) }; ok $@ =~ /improper structure/;
 eval { JSON::XS->new->use_simdjson(1)->decode (\*STDERR) }; ok $@ =~ /improper structure/;

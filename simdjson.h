@@ -1,4 +1,4 @@
-/* auto-generated on 2023-03-24 12:44:18 -0400. Do not edit! */
+/* auto-generated on 2023-03-30 12:35:38 -0400. Do not edit! */
 /* begin file include/simdjson.h */
 #ifndef SIMDJSON_H
 #define SIMDJSON_H
@@ -23586,7 +23586,7 @@ public:
   /**
    * Returns the current location in the document if in bounds.
    */
-  inline simdjson_result<const char *> current_location() noexcept;
+  inline simdjson_result<const char *> current_location() const noexcept;
 
   /**
    * Updates this json iterator so that it is back at the beginning of the document,
@@ -24993,7 +24993,14 @@ public:
   /**
    * Returns the current location in the document if in bounds.
    */
-  inline simdjson_result<const char *> current_location() noexcept;
+  inline simdjson_result<const char *> current_location() const noexcept;
+
+  /**
+   * Returns true if this document has been fully parsed.
+   * If you have consumed the whole document and at_end() returns
+   * false, then there may be trailing content.
+   */
+  inline bool at_end() const noexcept;
 
   /**
    * Returns the current depth in the document if in bounds.
@@ -25202,6 +25209,7 @@ public:
   simdjson_inline simdjson_result<bool> is_scalar() noexcept;
   simdjson_inline simdjson_result<const char *> current_location() noexcept;
   simdjson_inline int32_t current_depth() const noexcept;
+  simdjson_inline bool at_end() const noexcept;
   simdjson_inline bool is_negative() noexcept;
   simdjson_inline simdjson_result<bool> is_integer() noexcept;
   simdjson_inline simdjson_result<SIMDJSON_BUILTIN_IMPLEMENTATION::ondemand::number_type> get_number_type() noexcept;
@@ -27924,7 +27932,7 @@ inline std::string json_iterator::to_string() const noexcept {
           + std::string(" ]");
 }
 
-inline simdjson_result<const char *> json_iterator::current_location() noexcept {
+inline simdjson_result<const char *> json_iterator::current_location() const noexcept {
   if (!is_alive()) {    // Unrecoverable error
     if (!at_root()) {
       return reinterpret_cast<const char *>(token.peek(-1));
@@ -28146,6 +28154,11 @@ simdjson_warn_unused simdjson_inline error_code value_iterator::check_root_objec
   // Note that adding a check for 'streaming' is not expensive since we only have at most
   // one root element.
   if ( ! _json_iter->streaming() ) {
+    // The following lines do not fully protect against garbage content within the
+    // object: e.g., `{"a":2} foo }`. Users concerned with garbage content should
+    // call `at_end()` on the document instance at the end of the processing to
+    // ensure that the processing has finished at the end.
+    //
     if (*_json_iter->peek_last() != '}') {
       _json_iter->abandon();
       return report_error(INCOMPLETE_ARRAY_OR_OBJECT, "missing } at end");
@@ -28537,6 +28550,11 @@ simdjson_warn_unused simdjson_inline error_code value_iterator::check_root_array
   // Note that adding a check for 'streaming' is not expensive since we only have at most
   // one root element.
   if ( ! _json_iter->streaming() ) {
+    // The following lines do not fully protect against garbage content within the
+    // array: e.g., `[1, 2] foo]`. Users concerned with garbage content should
+    // also call `at_end()` on the document instance at the end of the processing to
+    // ensure that the processing has finished at the end.
+    //
     if (*_json_iter->peek_last() != ']') {
       _json_iter->abandon();
       return report_error(INCOMPLETE_ARRAY_OR_OBJECT, "missing ] at end");
@@ -29558,13 +29576,18 @@ inline std::string document::to_debug_string() noexcept {
   return iter.to_string();
 }
 
-inline simdjson_result<const char *> document::current_location() noexcept {
+inline simdjson_result<const char *> document::current_location() const noexcept {
   return iter.current_location();
 }
 
 inline int32_t document::current_depth() const noexcept {
   return iter.depth();
 }
+
+inline bool document::at_end() const noexcept {
+  return iter.at_end();
+}
+
 
 inline bool document::is_alive() noexcept {
   return iter.is_alive();
@@ -29588,12 +29611,14 @@ simdjson_inline simdjson_result<value> document::get_value() noexcept {
   iter.assert_at_document_depth();
   switch (*iter.peek()) {
     case '[': {
+      // The following lines check that the document ends with ].
       auto value_iterator = get_root_value_iterator();
       auto error = value_iterator.check_root_array();
       if(error) { return error; }
       return value(get_root_value_iterator());
     }
     case '{': {
+      // The following lines would check that the document ends with }.
       auto value_iterator = get_root_value_iterator();
       auto error = value_iterator.check_root_object();
       if(error) { return error; }
@@ -30042,6 +30067,12 @@ simdjson_inline simdjson_result<const char *> simdjson_result<SIMDJSON_BUILTIN_I
   if (error()) { return error(); }
   return first.current_location();
 }
+
+simdjson_inline bool simdjson_result<SIMDJSON_BUILTIN_IMPLEMENTATION::ondemand::document>::at_end() const noexcept {
+  if (error()) { return error(); }
+  return first.at_end();
+}
+
 
 simdjson_inline int32_t simdjson_result<SIMDJSON_BUILTIN_IMPLEMENTATION::ondemand::document>::current_depth() const noexcept {
   if (error()) { return error(); }
