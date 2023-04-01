@@ -58,6 +58,7 @@ SV * filter_object (dec_t *dec, SV *sv, HV* hv);
 simdjson_parser_t simdjson_init();
 void simdjson_destroy(simdjson_parser_t self);
 SV* simdjson_decode(dec_t *dec);
+SV * simdjson_get_version();
 
 #ifdef __cplusplus
 }

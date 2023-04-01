@@ -2428,3 +2428,10 @@ void decode_json (SV *jsonstr)
         XPUSHs (jsonstr);
 }
 
+void simdjson_version ()
+	PPCODE:
+{
+        SV *version_info;
+        PUTBACK; version_info = simdjson_get_version(); SPAGAIN;
+        XPUSHs (version_info);
+}

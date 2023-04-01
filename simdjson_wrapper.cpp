@@ -479,12 +479,12 @@ void simdjson_destroy(simdjson_parser_t wrapper) {
   delete parser;
 }
 
-/* not used currently, just here for reference */
-void simdjson_print_info() {
-  std::cout << "simdjson v" << SIMDJSON_VERSION << std::endl;
-  std::cout << "Detected the best implementation for your machine: " << simdjson::get_active_implementation()->name();
-  std::cout << "(" << simdjson::get_active_implementation()->description() << ")" << std::endl;
-  for (auto implementation : simdjson::get_available_implementations()) {
-    std::cout << implementation->name() << ": " << implementation->description() << std::endl;
-  }
+SV * simdjson_get_version() {
+  SV *version_info = newSVpvs("v" SIMDJSON_VERSION " ");
+  sv_catpv(version_info, simdjson::get_active_implementation()->name().c_str());
+  sv_catpv(version_info, "(");
+  sv_catpv(version_info, simdjson::get_active_implementation()->description().c_str());
+  sv_catpv(version_info, ")");
+  return version_info;
 }
+

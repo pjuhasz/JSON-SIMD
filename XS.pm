@@ -23,6 +23,10 @@ JSON::XS - 正しくて高速な JSON シリアライザ/デシリアライザ
  $pretty_printed_unencoded = $coder->encode ($perl_scalar);
  $perl_scalar = $coder->decode ($unicode_json_text);
 
+ $coder = JSON::XS->new->use_simdjson;
+ $perl_scalar = $coder->decode ($unicode_json_text);
+ $perl_scalar = $coder->decode_at_path ($unicode_json_text, '/just/a/part');
+
  # Note that JSON version 2.0 and above will automatically use JSON::XS
  # if available, at virtually no speed overhead either, so you should
  # be able to just:
@@ -35,7 +39,8 @@ JSON::XS - 正しくて高速な JSON シリアライザ/デシリアライザ
 
 This module converts Perl data structures to JSON and vice versa. Its
 primary goal is to be I<correct> and its secondary goal is to be
-I<fast>. To reach the latter goal it was written in C.
+I<fast>. To reach the latter goal it was written in C. For extra speed,
+it can use simdjson, the fastest JSON parser currently available.
 
 See MAPPING, below, on how JSON::XS maps perl values to JSON values and
 vice versa.
@@ -67,6 +72,11 @@ feature).
 
 Compared to other JSON modules and other serialisers such as Storable,
 this module usually compares favourably in terms of speed, too.
+
+Optionally, this module can use simdjson L<https://simdjson.org/>,
+a recent C++ library that uses
+SIMD instructions available on modern processors to speed up decoding
+even more.
 
 =item * simple to use
 
@@ -128,6 +138,15 @@ This function call is functionally identical to:
    $perl_scalar = JSON::XS->new->utf8->decode ($json_text)
 
 Except being faster.
+
+=item $version_string = JSON::XS::simdjson_version
+
+Returns a string with the version of the embedded simdjson library and
+the currently active implementation. E.g.
+
+   v3.1.6 haswell(Intel/AMD AVX2)
+
+This function is not exported, you must call it as C<JSON::XS::simdjson_version>.
 
 =back
 
@@ -199,6 +218,31 @@ be chained:
 
    my $json = JSON::XS->new->utf8->space_after->encode ({a => [1,2]})
    => {"a": [1, 2]}
+
+=item $json = $json->use_simdjson ([$enable])
+
+=item $enabled = $json->get_use_simdjson
+
+If C<$enable> is true (or missing), the C<decode> method (as well as the
+incremental decoder) will use the alternative simdjson decoding backend.
+
+Depending on the length and the structure of the document, the speedup
+may range from almost nothing (for very short documents) to dramatic
+(for long documents, especially with long Unicode keys). See the Benchmarks
+section below for more information. Note that simdjson uses runtime
+dispatching to select the best implementation depending on the instruction
+sets available in your CPU, so your results may vary.
+
+For valid documents, C<decode> in this mode should produce the same Perl
+data structure as with the legacy mode. For invalid documents, errors
+will be reported differently, and the C<decode_prefix> method may result
+a different offset (because the simdjson parser consumes trailing whitespace).
+
+This option is not compatible with C<allow_tags> and C<relaxed>, and
+the JSON object will croak if you try to use either of them with
+C<use_simdjson>.
+
+This option has no effect on the encoder.
 
 =item $json = $json->ascii ([$enable])
 
@@ -363,6 +407,8 @@ resource files etc.)
 If C<$enable> is false (the default), then C<decode> will only accept
 valid JSON texts.
 
+This option is not compatible with C<use_simdjson>.
+
 Currently accepted extensions are:
 
 =over
@@ -523,6 +569,8 @@ them via a call to the C<THAW> method.
 If C<$enable> is false (the default), then C<encode> will not consider
 this type of conversion, and tagged JSON values will cause a parse error
 in C<decode>, as if tags were not part of the grammar.
+
+This option is not compatible with C<use_simdjson>.
 
 =item $json->boolean_values ([$false, $true])
 
@@ -709,6 +757,37 @@ and you need to know where the JSON text ends.
 
    JSON::XS->new->decode_prefix ("[1] the tail")
    => ([1], 3)
+
+=item $perl_scalar = $json->decode_at_path ($json_text, $path)
+
+This works like the C<decode> method, with the difference that it expects
+a second path argument that specifies a part of the JSON document. The
+decode quickly locates the fragment of the document, then decodes and
+returns just that part as a Perl data structure or scalar, without fully
+parsing or allocating for the rest. This is especially useful if the
+document is large, has a known structure, but only a small part of it is
+actually required for further processing.
+
+   my $large_json = '{
+      "ignore": "this",
+      "don't need": ["these", "either"],
+      "foo": ["bar", {"baz": "quux"}]
+   }';
+   JSON::XS->new->use_simdjson->decode_at_path($large_json, '/foo/1');
+   => {bar => 'quux'}
+
+The path argument is expected to be a JSON Pointer as described by RFC 6901
+L<https://www.rfc-editor.org/rfc/rfc6901>.
+That is, it must consist of a series object keys or array indices, separated by
+slashes. The root path (that selects the entire document) is the empty string,
+not a lone slash.
+
+This method croaks if the path is malformed, or it refers to a nonexistent
+part of the document.
+
+Currently this method only works with C<use_simdjson> mode, with the
+legacy decoder the path argument is ignored and the entire document is
+decoded instead. FIXME: write fallback method for legacy mode
 
 =back
 
@@ -1536,6 +1615,30 @@ will be broken due to missing (or wrong) Unicode handling. Others refuse
 to decode or encode properly, so it was impossible to prepare a fair
 comparison table for that case.
 
+=head3 COMPARISON OF THE SIMDJSON AND LEGACY DECODERS
+
+      test_case     length   original   simdjson  diff%
+  -----------------------------------------------------
+      long.json      18446   11158.33   13320.00  19.37
+  longkeys.json   10000302      54.99     134.37 144.35
+     short.json        130  510595.83  515252.03   0.91
+   twitter.json     631515     258.99     363.98  40.54
+
+Here the numbers in the C<original> and C<simdjson> columns are the
+number of decodes performed per second, with the legacy mode and C<use_simdjson>
+respectively, more is better. The last column is just the difference in
+percents.
+C<long.json> and C<short.json> are test documents described above,
+C<twitter.json> comes from the simdjson test suite, and C<longkeys.json>
+was generated by the following script: 
+
+   perl -MJSON::XS -le '\
+   my $k = "a" x 1e5; my $x={}; \
+   for (1..50) {$x->{$k} = $k; $k++;} \
+   print encode_json($x)' > longkeys.json
+
+Note that these numbers are not comparable with the ones in the above
+section (as they were ran on different computers).
 
 =head1 SECURITY CONSIDERATIONS
 
