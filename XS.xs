@@ -1852,6 +1852,10 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
   if (!(dec.json.flags & F_ALLOW_NONREF) && json_nonref (sv))
     croak ("JSON text must be an object or array (but found number, string, true, false or null, use allow_nonref to allow this)");
 
+  if (expect_false(path && !(dec.json.flags & F_USE_SIMDJSON))) {
+    /* TODO parse the path and derefer hash/array elements */
+  }
+
   return sv;
 }
 
