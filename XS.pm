@@ -25,7 +25,7 @@ JSON::XS - 正しくて高速な JSON シリアライザ/デシリアライザ
 
  $coder = JSON::XS->new->use_simdjson;
  $perl_scalar = $coder->decode ($unicode_json_text);
- $perl_scalar = $coder->decode_at_path ($unicode_json_text, '/just/a/part');
+ $perl_scalar = $coder->decode_at_pointer ($unicode_json_text, '/just/a/part');
 
  # Note that JSON version 2.0 and above will automatically use JSON::XS
  # if available, at virtually no speed overhead either, so you should
@@ -758,7 +758,7 @@ and you need to know where the JSON text ends.
    JSON::XS->new->decode_prefix ("[1] the tail")
    => ([1], 3)
 
-=item $perl_scalar = $json->decode_at_path ($json_text, $path)
+=item $perl_scalar = $json->decode_at_pointer ($json_text, $path)
 
 This works like the C<decode> method, with the difference that it expects
 a second path argument that specifies a part of the JSON document. The
@@ -773,14 +773,23 @@ actually required for further processing.
       "don't need": ["these", "either"],
       "foo": ["bar", {"baz": "quux"}]
    }';
-   JSON::XS->new->use_simdjson->decode_at_path($large_json, '/foo/1');
+   JSON::XS->new->use_simdjson->decode_at_pointer($large_json, '/foo/1');
    => {bar => 'quux'}
 
 The path argument is expected to be a JSON Pointer as described by RFC 6901
 L<https://www.rfc-editor.org/rfc/rfc6901>.
 That is, it must consist of a series object keys or array indices, separated by
 slashes. The root path (that selects the entire document) is the empty string,
-not a lone slash.
+not a lone slash. For a complete description of the syntax, including
+escaping with keys that contain slashes, refer to the RFC text.
+
+One limitation of this method is that it the path argument expects
+I<unescaped> object keys. E.g. for the JSON document
+
+   {"k\u0065y":"value"}
+
+you would have to specify the path exactly as it appears in the document,
+as C<k\u0065y>, not as C<key>, as it would appear in the decoded Perl hash.
 
 This method croaks if the path is malformed, or it refers to a nonexistent
 part of the document.

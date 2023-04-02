@@ -2258,7 +2258,7 @@ void decode_prefix (JSON *self, SV *jsonstr)
         PUSHs (sv_2mortal (newSVuv (ptr_to_index (jsonstr, SvPV_nolen (jsonstr) + offset))));
 }
 
-void decode_at_path (JSON *self, SV *jsonstr, SV *path)
+void decode_at_pointer (JSON *self, SV *jsonstr, SV *path)
 	PPCODE:
         PUTBACK; jsonstr = decode_json (jsonstr, self, 0, path); SPAGAIN;
         XPUSHs (jsonstr);
