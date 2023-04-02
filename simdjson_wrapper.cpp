@@ -183,9 +183,7 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         // Most real-life hash keys are expected to be short ASCII strings,
         // so we try to salvage the situation by scanning the key for non-ASCII characters
         // and pass the key as UTF-8 only when necessary.
-        //if (!validate_ascii(key.data(), key.size())) {
-          flags = HVhek_UTF8 * !validate_ascii(key.data(), key.size());
-        //}
+        flags = HVhek_UTF8 * !validate_ascii(key.data(), key.size());
         hv_common(hv, NULL, key.data(), key.size(), flags, HV_FETCH_ISSTORE|HV_FETCH_JUST_SV, sv_value, 0);
       }
 
