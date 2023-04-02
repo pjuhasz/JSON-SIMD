@@ -407,7 +407,7 @@ SV * simdjson_decode(dec_t *dec) {
       // but re-parsing the content with iterate_many doesn't work for some reason,
       // and even if it worked, there are cases where iterate_many fails (e.g. '1111 }', it says empty json (as of simdjson 3.1.6).
       // So we have to find the end of the valid content ourselves and re-parse a truncated document, yet another desperate hack.
-      if (dec->error_code == TRAILING_CONTENT) {
+      if (simdjson_unlikely(dec->error_code == TRAILING_CONTENT)) {
         ondemand::document doc2;
         size_t size = find_end_of_scalar(SvPVX(dec->input));
 
@@ -422,16 +422,16 @@ SV * simdjson_decode(dec_t *dec) {
     }
   } else {
     ondemand::value val;
-    if (dec->path) {
+    if (simdjson_unlikely(dec->path)) {
       err = doc.at_pointer(dec->path).get(val);
     } else {
       err = doc.get_value().get(val);
     }
     if (simdjson_unlikely(err == INCOMPLETE_ARRAY_OR_OBJECT)) {
       // desperate, gnarly hack:
-      // simdjson is broken by design, because parse.iterate (at least in on demand mode)
-      // can not distinguish between an incomplete document and a valid document w trailing garbage.
-      // So try to re-parse with iterate-many to decide.
+      // simdjson has fundamental limitations, because parse.iterate (in on demand mode)
+      // can not distinguish between an incomplete document and a valid document with trailing garbage.
+      // So try to re-parse with iterate_many to decide.
       ondemand::document_stream stream;
       auto err = parser->iterate_many(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(stream);
       ERROR_RETURN_SAVE_MSG;
