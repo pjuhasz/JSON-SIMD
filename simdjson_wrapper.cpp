@@ -160,6 +160,7 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
       HV *hv = newHV();
 
       for (auto field : element.get_object()) {
+        U32 flags = 0;
         std::string_view key;
         auto err = field.unescaped_key().get(key);
         ERROR_RETURN_CLEANUP(hv);
@@ -174,7 +175,7 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         // simdjson always returns the key as an UTF-8-encoded string
         // (it has already checked and unescaped it).
         // However, for Perl hash keys we have to specify whether they are UTF-8.
-        // If yes, we have to supply a negative size argument.
+        // If yes, we have to supply the appropriate flag.
         // This is necessary to avoid double-encoded mojibake keys.
         // The downside: UTF-8 keys are terribly slow, they are reallocated,
         // scanned and downgraded in a very inefficient way.
@@ -182,11 +183,10 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         // Most real-life hash keys are expected to be short ASCII strings,
         // so we try to salvage the situation by scanning the key for non-ASCII characters
         // and pass the key as UTF-8 only when necessary.
-         if (validate_ascii(key.data(), key.size())) {
-          hv_store (hv, key.data(), key.size(), sv_value, 0);
-        } else {
-          hv_store (hv, key.data(), -key.size(), sv_value, 0);
-        }
+        //if (!validate_ascii(key.data(), key.size())) {
+          flags = HVhek_UTF8 * !validate_ascii(key.data(), key.size());
+        //}
+        hv_common(hv, NULL, key.data(), key.size(), flags, HV_FETCH_ISSTORE|HV_FETCH_JUST_SV, sv_value, 0);
       }
 
       DEC_DEC_DEPTH;
