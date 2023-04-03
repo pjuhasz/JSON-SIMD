@@ -993,6 +993,76 @@ encode_json (SV *scalar, JSON *json)
 // -- moved to simdjson_wrapper.h
 // typedef struct { ... } dec_t;
 
+static SV *
+emulate_at_pointer (SV *sv, SV *path)
+{
+  if (!path ) {
+    return sv;
+  }
+
+  SvUPGRADE (path, SVt_PV);
+  char *orig = SvPVX(path);
+  size_t len = SvCUR(path);
+  SvGROW(path, SvCUR (path) + 1); // should basically be a NOP
+  orig[len+1] = '\0';
+
+  // empty path allowed (for scalars and , addresses the entire document
+  if (len == 0) {
+    return sv;
+  }
+
+  if (!SvROK(sv)) {
+    croak("INVALID_JSON_POINTER: Invalid JSON pointer syntax");
+  }
+
+  if (orig[0] != '/') {
+    croak("INVALID_JSON_POINTER: Invalid JSON pointer syntax");
+  }
+  orig++;
+
+  char *key;
+  Newx(key, len, char);
+
+  char last_segment = 0;
+  for (;;) {
+    svtype reftype = SvTYPE(SvRV(sv));
+    memset(key, 0, len);
+
+    char *p = key;
+    while (*orig && *orig != '/') {
+      *p++ = *orig++;
+    }
+
+    //key = start;
+    // TODO unescape ~1 -> /, ~0 -> ~
+    
+    if (reftype == SVt_PVAV) {
+      // TODO convert to number, check array element
+      croak("FIXME");
+    } else if (reftype == SVt_PVHV) {
+      // TODO unicode keys?
+      SV** elem = hv_fetch((HV*) SvRV(sv), key, p-key, 0);
+      if (elem && *elem) {
+        sv = *elem;
+      } else {
+        // FIXME goto to free
+        croak("NO_SUCH_FIELD: The JSON field referenced does not exist in this object");
+      }
+    }
+    
+    if (*orig == '\0') {
+      break;
+    }
+  } 
+
+  Safefree(key);
+  return sv;
+
+emulate_fail:
+  Safefree(key);
+  croak("FIXME");
+}
+
 INLINE void
 decode_comment (dec_t *dec)
 {
@@ -1853,7 +1923,8 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
     croak ("JSON text must be an object or array (but found number, string, true, false or null, use allow_nonref to allow this)");
 
   if (expect_false(path && !(dec.json.flags & F_USE_SIMDJSON))) {
-    /* TODO parse the path and derefer hash/array elements */
+    /* parse the path and derefer hash/array elements */
+    sv = emulate_at_pointer(sv, path);
   }
 
   return sv;
