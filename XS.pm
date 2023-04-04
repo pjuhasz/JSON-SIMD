@@ -762,11 +762,13 @@ and you need to know where the JSON text ends.
 
 This works like the C<decode> method, with the difference that it expects
 a second path argument that specifies a part of the JSON document. The
-decode quickly locates the fragment of the document, then decodes and
-returns just that part as a Perl data structure or scalar, without fully
-parsing or allocating for the rest. This is especially useful if the
-document is large, has a known structure, but only a small part of it is
-actually required for further processing.
+decoder quickly locates the specified fragment of the document, then
+decodes and returns just that part as a Perl data structure or scalar,
+without fully parsing or allocating for the rest. This is especially useful
+if the document is large, has a known structure, but only a small part of
+it is actually required for further processing. In these cases this method
+may be order of magnitudes faster and may use less memory than decoding the
+entire document. Example:
 
    my $large_json = '{
       "ignore": "this",
@@ -790,13 +792,14 @@ I<unescaped> object keys. E.g. for the JSON document
 
 you would have to specify the path exactly as it appears in the document,
 as C<k\u0065y>, not as C<key>, as it would appear in the decoded Perl hash.
+(However, this is not true in legacy mode, which expects the escaped key.
+This is an unfortunate incompatibility.)
 
 This method croaks if the path is malformed, or it refers to a nonexistent
 part of the document.
 
-Currently this method only works with C<use_simdjson> mode, with the
-legacy decoder the path argument is ignored and the entire document is
-decoded instead. FIXME: write fallback method for legacy mode
+This method works in both simdjson mode and with the legacy decoder,
+however, for the latter it doesn't provide any speed or memory advantages.
 
 =back
 
