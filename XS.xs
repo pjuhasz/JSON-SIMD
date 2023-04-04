@@ -1023,35 +1023,86 @@ emulate_at_pointer (SV *sv, SV *path)
   char *key;
   Newx(key, len, char);
 
-  char last_segment = 0;
-  for (;;) {
+  char *err;
+  char done = 0;
+  while (!done) {
     svtype reftype = SvTYPE(SvRV(sv));
+    char *p = key;
+    char got_key = 0;
+
     memset(key, 0, len);
 
-    char *p = key;
-    while (*orig && *orig != '/') {
-      *p++ = *orig++;
-    }
-
-    //key = start;
-    // TODO unescape ~1 -> /, ~0 -> ~
-    
-    if (reftype == SVt_PVAV) {
-      // TODO convert to number, check array element
-      croak("FIXME");
-    } else if (reftype == SVt_PVHV) {
-      // TODO unicode keys?
-      SV** elem = hv_fetch((HV*) SvRV(sv), key, p-key, 0);
-      if (elem && *elem) {
-        sv = *elem;
-      } else {
-        // FIXME goto to free
-        croak("NO_SUCH_FIELD: The JSON field referenced does not exist in this object");
+    while (!got_key) {
+      switch (*orig) {
+        case '~':
+          orig++;
+          if (*orig == '0') {
+            *p++ = '~';
+          } else if (*orig == '1') {
+            *p++ = '/';
+          } else {
+            err = "INVALID_JSON_POINTER: Invalid JSON pointer syntax";
+            goto emulate_fail;
+          }
+          orig++;
+          break;
+        case '/':
+          got_key = 1;
+          orig++;
+          break;
+        case '\0':
+          done = 1;
+          got_key = 1;
+          break;
+        default:
+          *p++ = *orig++;
       }
     }
     
-    if (*orig == '\0') {
-      break;
+    if (reftype == SVt_PVAV) {
+      if (p == key || (p - key > 1 && key[0] == '0')) {
+        // empty string and numbers prefixed with 0 are not valid for arrays
+        err = "INVALID_JSON_POINTER: Invalid JSON pointer syntax";
+        goto emulate_fail;
+      } else if (p - key == 1 && key[0] == '-') {
+        // - means "the append position" or "the element after the end of the array"
+        // We don't support this, because we're returning a real element, not a position.
+        err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
+        goto emulate_fail;
+      }
+
+      UV idx;
+      int res = grok_number(key, p-key, &idx);
+
+      if (!(res & IS_NUMBER_IN_UV) || res & (IS_NUMBER_GREATER_THAN_UV_MAX|IS_NUMBER_NOT_INT|IS_NUMBER_NEG|IS_NUMBER_INFINITY|IS_NUMBER_NAN)) {
+        err = "INCORRECT_TYPE: The JSON element does not have the requested type";
+        goto emulate_fail;
+      }
+
+      AV *av = (AV*) SvRV(sv);
+      SSize_t last_idx = av_top_index(av);
+      if (idx > last_idx) {
+        err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
+        goto emulate_fail;
+      }
+
+      SV **elem = av_fetch(av, idx, 0);
+      if (elem && *elem) {
+        sv = *elem;
+      } else {
+        // ?
+        err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
+        goto emulate_fail;
+      }
+    } else if (reftype == SVt_PVHV) {
+      // TODO unicode keys?
+      SV **elem = hv_fetch((HV*) SvRV(sv), key, p-key, 0);
+      if (elem && *elem) {
+        sv = *elem;
+      } else {
+        err = "NO_SUCH_FIELD: The JSON field referenced does not exist in this object";
+        goto emulate_fail;
+      }
     }
   } 
 
@@ -1060,7 +1111,7 @@ emulate_at_pointer (SV *sv, SV *path)
 
 emulate_fail:
   Safefree(key);
-  croak("FIXME");
+  croak("%s", err);
 }
 
 INLINE void
