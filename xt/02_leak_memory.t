@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Test::More;
 use Test::MemoryGrowth;
+use Test::LeakTrace;
 use FindBin qw/$Bin/;
 use utf8;
 
@@ -29,10 +30,33 @@ no_growth {
 
 no_growth {
 		my $J = JSON::XS->new->use_simdjson;
-		my $perl = $J->decode_at_path($json, '/params');
+		my $perl = $J->decode_at_pointer($json, '/params');
 	}
 	calls   => 5000000,
 	burn_in => 10,
-	'decode_at_path does not leak';
+	'decode_at_pointer does not leak';
+
+
+no_growth {
+		my $J = JSON::XS->new;
+		my $perl = $J->decode_at_pointer($json, '/params');
+	}
+	calls   => 5000000,
+	burn_in => 10,
+	'decode_at_pointer emulation does not leak';
+
+no_leaks_ok {
+	my $J = JSON::XS->new->use_simdjson;
+	my $perl = $J->decode($json);
+} "decode does not leak SVs";
+
+no_leaks_ok {
+	my $perl = $J_longlived->decode($json);
+} "decode with persistent object does not leak SVs";
+
+no_leaks_ok {
+	my $J = JSON::XS->new;
+	my $perl = $J->decode_at_pointer($json, '/params');
+} "decode_at_pointer emulation does not leak SVs";
 
 done_testing();
