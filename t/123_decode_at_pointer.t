@@ -60,7 +60,7 @@ sub test {
 	eval {$J->decode_at_pointer($arr, '/');}; ok $@ =~ /Invalid JSON pointer syntax/;
 
 	ok $J->decode_at_pointer('1111', '') == 1111;
-	eval {$J->decode_at_pointer('1111', '/bar');}; ok $@ =~ /Invalid JSON pointer syntax/;
+	eval {$J->decode_at_pointer('1111', '/bar');}; ok $@ =~ /only the empty path is allowed for scalar documents/;
 }
 
 test(JSON::XS->new->use_simdjson, 0);

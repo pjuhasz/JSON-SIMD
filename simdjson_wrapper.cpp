@@ -4,6 +4,43 @@
 
 using namespace simdjson; // optional
 
+// 256 errors ought to be enough for anybody - Bill Gates
+#define CUSTOM_ERROR_BASE 256
+
+#define CUSTOM_ERROR_LIST \
+	ENTRY(0, CERR_PATH_IN_SCALAR,       "only the empty path is allowed for scalar documents") \
+	ENTRY(1, CERR_NUMBER_LEADING_ZERO,  "malformed number (leading zero must not be followed by another digit)") \
+	ENTRY(2, CERR_NUMBER_INITIAL_MINUS, "malformed number (no digits after initial minus)") \
+	ENTRY(3, CERR_NUMBER_DECIMAL,       "malformed number (no digits after decimal point)") \
+	ENTRY(4, CERR_NUMBER_EXP,           "malformed number (no digits after exp sign)")
+
+enum {
+#define ENTRY(a,b,c) b = a + CUSTOM_ERROR_BASE,
+CUSTOM_ERROR_LIST
+#undef ENTRY
+	NUM_CUSTOM_ERRORS
+};
+
+typedef struct {
+	int code;
+	const char *message;
+} custom_error_message_t;
+
+const custom_error_message_t custom_error_messages[] {
+#define ENTRY(a,b,c) {b, c},
+CUSTOM_ERROR_LIST
+#undef ENTRY
+};
+
+static inline const char* custom_error_message(int code) {
+	if (code >= CUSTOM_ERROR_BASE && code < NUM_CUSTOM_ERRORS && custom_error_messages[code - CUSTOM_ERROR_BASE].code == code) {
+		return custom_error_messages[code - CUSTOM_ERROR_BASE].message;
+	} else if (code < NUM_ERROR_CODES) {
+		return error_message((simdjson::error_code) code);
+	} 
+	return "Something went wrong, you should never see this message";
+}
+
 // nonsense required because raw_json_token() behaves differently for values and documents
 static std::string_view get_raw_json_token_from(ondemand::document& doc) {
   std::string_view str;
@@ -15,11 +52,13 @@ static std::string_view get_raw_json_token_from(ondemand::value val) {
   return val.raw_json_token();
 }
 
-// Check if it matches /[+-]?[1-9][0-9]*\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly.
+// Check if a string encodes a number, that is,
+// it matches /[+-]?[1-9][0-9]*\.?[0-9]*(?:[eE][+-]?[0-9]+)?/, clumsily and slowly.
+// Returns an error code, or 0 if it appears to be a valid number.
 // This should be a rare special case.
-static inline bool validate_large_number(std::string_view& s) {
+static inline int validate_large_number(std::string_view& s) {
   if (s.size() == 0)
-    return false;
+    return (int)NUMBER_ERROR;
 
   unsigned long i = 0;
   if (s[0] == '-')
@@ -28,28 +67,33 @@ static inline bool validate_large_number(std::string_view& s) {
   bool got_decimal = false;
   bool got_exp = false;
 
-  if (i == s.size() || s[i] == '0' || ! isdigit(s[i]))
-    return false;
+  if (s[0] == '-' && (1 == s.size() || ! isdigit(s[i])))
+    return CERR_NUMBER_INITIAL_MINUS;
+  if (s[i] == '0' && (i+1 == s.size() || isdigit(s[i+1])))
+    return CERR_NUMBER_LEADING_ZERO;
 
   for (; i < s.size(); i++) {
     if ( !( isdigit(s[i]) || (!got_decimal && s[i] == '.') || (!got_exp && (s[i] == 'e' || s[i] == 'E') ) ) )
-      return false;
-    if (s[i] == '.')
+      return NUMBER_ERROR;
+    if (s[i] == '.') {
       got_decimal = true;
+      if (i+1 == s.length())
+        return CERR_NUMBER_DECIMAL;
+    }
     if (s[i] == 'e' || s[i] == 'E') {
       got_exp = true;
       got_decimal = true; // dot also not allowed after exponent
       if (i+1 == s.length())
-        return false;
+        return CERR_NUMBER_EXP;
       // peek ahead and consume exponent sign if present
       if (s[i+1] == '-' || s[i+1] == '+') {
         i++;
         if (i+1 == s.length())
-          return false;
+          return CERR_NUMBER_INITIAL_MINUS;
       }
     }
   }
-  return true;
+  return 0;
 }
 
 // taken from simdutf8
@@ -199,19 +243,18 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
   case ondemand::json_type::number:
     {
       ondemand::number num;
-      auto err = element.get_number().get(num);
+      int err = element.get_number().get(num);
       if (simdjson_unlikely(err)) {
         // for scalar documents it can detect trailing content
         ERROR_RETURN_IF(TRAILING_CONTENT);
 
         // handle case of large numbers:
         // we save it as a string, but try to validate if it looks like a number at least
+        // (and if it is a small but invalid number, get a more precise error code)
         auto str = get_raw_json_token_from(element);
-        if (!validate_large_number(str)) {
-          // we forge an error code and bail out
-          err = NUMBER_ERROR;
-          ERROR_RETURN;
-        }
+        err = validate_large_number(str);
+        ERROR_RETURN;
+
         res = newSVpvn_utf8(str.data(), str.size(), 1);
         break;
       }
@@ -352,7 +395,7 @@ static char *get_location(ondemand::document& doc) {
 
 static void save_errormsg_location(dec_t *dec, char *location) {
   if (dec->error_code) {
-    dec->err = error_message((simdjson::error_code)dec->error_code);
+    dec->err = custom_error_message(dec->error_code);
   }
   if (location) {
     dec->cur = location;
@@ -398,7 +441,7 @@ SV * simdjson_decode(dec_t *dec) {
   if (simdjson_unlikely(is_scalar)) {
     if (dec->path && *(dec->path)) {
       // don't parse anything, non-root path doesn't make sense with scalar values
-      dec->error_code = INVALID_JSON_POINTER;
+      dec->error_code = CERR_PATH_IN_SCALAR;
       dec->error_line_number = __LINE__;
       ERROR_RETURN_SAVE_MSG;
     } else {

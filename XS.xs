@@ -1014,7 +1014,7 @@ emulate_at_pointer (SV *sv, SV *path)
   }
 
   if (!SvROK(sv)) {
-    croak("INVALID_JSON_POINTER: Invalid JSON pointer syntax");
+    croak("only the empty path is allowed for scalar documents");
   }
 
   if (orig[0] != '/') {
