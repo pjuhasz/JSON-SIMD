@@ -1001,6 +1001,8 @@ emulate_at_pointer (SV *sv, SV *path)
   }
 
   SvUPGRADE (path, SVt_PV);
+  sv_utf8_upgrade (path);
+
   char *orig = SvPVX(path);
   size_t len = SvCUR(path);
   SvGROW(path, SvCUR (path) + 1); // should basically be a NOP
@@ -1096,7 +1098,7 @@ emulate_at_pointer (SV *sv, SV *path)
       }
     } else if (reftype == SVt_PVHV) {
       // TODO unicode keys?
-      SV **elem = hv_fetch((HV*) SvRV(sv), key, p-key, 0);
+      SV **elem = hv_fetch((HV*) SvRV(sv), key, -(p-key), 0);
       if (elem && *elem) {
         sv = *elem;
       } else {
