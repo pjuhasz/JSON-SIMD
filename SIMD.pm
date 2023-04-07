@@ -35,7 +35,7 @@ JSON::SIMD - JSON serialising/deserialising, done correctly and faster
 This module converts Perl data structures to JSON and vice versa. Its
 primary goal is to be I<correct> and its secondary goal is to be
 I<fast>. To reach the latter goal it was written in C. For extra speed,
-it can use simdjson, the fastest JSON parser currently available.
+it uses simdjson, the fastest JSON parser currently available, for decoding.
 
 See MAPPING, below, on how JSON::SIMD maps perl values to JSON values and
 vice versa.
@@ -220,6 +220,8 @@ be chained:
 
 If C<$enable> is true (or missing), the C<decode> method (as well as the
 incremental decoder) will use the alternative simdjson decoding backend.
+This is the default, use C<use_simdjson(0)> to switch back to the legacy
+decoder.
 
 Depending on the length and the structure of the document, the speedup
 may range from almost nothing (for very short documents) to dramatic
@@ -233,9 +235,9 @@ data structure as with the legacy mode. For invalid documents, errors
 will be reported differently, and the C<decode_prefix> method may result
 a different offset (because the simdjson parser consumes trailing whitespace).
 
-This option is not compatible with C<allow_tags> and C<relaxed>, and
-the JSON object will croak if you try to use either of them with
-C<use_simdjson>.
+This option is not compatible with C<allow_tags> and C<relaxed>, so
+using either of those options will silently disable simdjson mode and
+the legacy decoder will be used as long as they are enabled.
 
 This option has no effect on the encoder.
 
@@ -402,7 +404,8 @@ resource files etc.)
 If C<$enable> is false (the default), then C<decode> will only accept
 valid JSON texts.
 
-This option is not compatible with C<use_simdjson>.
+This option is not compatible with C<use_simdjson>, and using this option
+will silently disable simdjson mode.
 
 Currently accepted extensions are:
 
@@ -565,7 +568,8 @@ If C<$enable> is false (the default), then C<encode> will not consider
 this type of conversion, and tagged JSON values will cause a parse error
 in C<decode>, as if tags were not part of the grammar.
 
-This option is not compatible with C<use_simdjson>.
+This option is not compatible with C<use_simdjson>, and using this option
+will silently disable simdjson mode.
 
 =item $json->boolean_values ([$false, $true])
 
