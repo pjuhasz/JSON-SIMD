@@ -1,6 +1,6 @@
 =head1 NAME
 
-JSON::XS::Boolean - dummy module providing JSON::XS::Boolean
+JSON::SIMD::Boolean - dummy module providing JSON::SIMD::Boolean
 
 =head1 SYNOPSIS
 
@@ -14,11 +14,11 @@ similar modules. It's only needed for compatibility with data serialised
 before 3.0.
 
 Since 3.0, JSON::PP::Boolean has replaced it. Support for
-JSON::XS::Boolean will be removed in a future release.
+JSON::SIMD::Boolean will be removed in a future release.
 
 =cut
 
-use JSON::XS ();
+use JSON::SIMD ();
 
 1;
 
