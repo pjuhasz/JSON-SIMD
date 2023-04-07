@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..78\n"; }
+BEGIN { $| = 1; print "1..86\n"; }
 
 use utf8;
 use JSON::SIMD;

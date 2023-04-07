@@ -44,8 +44,8 @@ eval { JSON::SIMD->new->use_simdjson(0)->decode (*STDERR) }; ok !!$@; # cannot c
 
 eval { decode_json ("\"\xa0") }; ok $@ =~ /UNCLOSED_STRING/;
 eval { decode_json ("\"\xa0\"") }; ok $@ =~ /UTF8_ERROR/;
-eval { decode_json ("1\x01") }; warn "# FIXME $@"; ok $@ =~ /garbage after/;
-eval { decode_json ("1\x00") }; warn "# FIXME $@"; ok $@ =~ /garbage after/;
+eval { decode_json ("1\x01") }; ok $@ =~ /garbage after/;
+eval { decode_json ("1\x00") }; ok $@ =~ /garbage after/;
 eval { decode_json ("\"\"\x00") }; ok $@ =~ /garbage after/;
 eval { decode_json ("[]\x00") }; ok $@ =~ /garbage after/;
 

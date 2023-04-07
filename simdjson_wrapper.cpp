@@ -376,7 +376,13 @@ static size_t find_end_of_scalar(char *s) {
             return s - start;
         }
         break;
-      default: if (in_escape) { in_escape = false; }
+      default:
+        if (in_escape) {
+          in_escape = false;
+        }
+        if (*s < 0x20) {
+          return s - start;
+        }
     }
     s++;
   }
@@ -446,11 +452,11 @@ SV * simdjson_decode(dec_t *dec) {
       ERROR_RETURN_SAVE_MSG;
     } else {
       sv = recursive_parse_json<ondemand::document&>(dec, doc);
-      // For scalar documents it can detect trailing content,
+      // For scalar documents it can detect trailing content _most of the time_,
       // but re-parsing the content with iterate_many doesn't work for some reason,
       // and even if it worked, there are cases where iterate_many fails (e.g. '1111 }', it says empty json (as of simdjson 3.1.6).
       // So we have to find the end of the valid content ourselves and re-parse a truncated document, yet another desperate hack.
-      if (simdjson_unlikely(dec->error_code == TRAILING_CONTENT)) {
+      if (simdjson_unlikely(dec->error_code)) {
         ondemand::document doc2;
         size_t size = find_end_of_scalar(SvPVX(dec->input));
 
@@ -461,6 +467,15 @@ SV * simdjson_decode(dec_t *dec) {
 
       } else {
         location = get_location(doc);
+        if (simdjson_unlikely(SvCUR(dec->input) == 6)) {
+          // simdjson has a blind spot where it comes to the very specific document "false." where the . may be any non-structural char.
+          // FIXME remove this block when upstream fixes it
+          char *p = SvPVX(dec->input);
+          if (p[0] == 'f' && p[1] == 'a' && p[2] == 'l' && p[3] == 's' && p[4] == 'e' &&
+            p[5] != 0x20 && p[5] != 0x0d && p[5] != 0x0a && p[5] != 0x09) {
+            location = p+5;
+          }
+        }
       }
     }
   } else {
