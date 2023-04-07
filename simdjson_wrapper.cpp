@@ -1,5 +1,6 @@
 #include <iostream>
 #include "simdjson.h"
+#define PERL_NO_GET_CONTEXT
 #include "simdjson_wrapper.h"
 
 using namespace simdjson; // optional
@@ -167,6 +168,7 @@ static inline bool validate_ascii(const char *buf, size_t len) noexcept {
 
 template<typename T>
 static SV* recursive_parse_json(dec_t *dec, T element) {
+  dTHX;
   SV* res = NULL;
 
   ondemand::json_type t;
@@ -431,6 +433,8 @@ simdjson_parser_t simdjson_init() {
 SV * simdjson_decode(dec_t *dec) {
   SV *sv = NULL;
 
+  dTHX;
+
   SvGROW(dec->input, SvCUR (dec->input) + SIMDJSON_PADDING);
 
   ondemand::parser* parser = static_cast<ondemand::parser*>(dec->json.simdjson);
@@ -536,6 +540,8 @@ void simdjson_destroy(simdjson_parser_t wrapper) {
 }
 
 SV * simdjson_get_version() {
+  dTHX;
+
   SV *version_info = newSVpvs("v" SIMDJSON_VERSION " ");
   sv_catpv(version_info, simdjson::get_active_implementation()->name().c_str());
   sv_catpv(version_info, "(");
