@@ -13,7 +13,7 @@ use JSON::SIMD;
 #########################
 my ($js,$obj,$str);
 
-my $pc = JSON::SIMD->new->use_simdjson(1);
+my $pc = JSON::SIMD->new->use_simdjson(0);
 
 $obj = {test => qq|abc"def|};
 $str = $pc->encode($obj);

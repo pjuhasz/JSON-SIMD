@@ -8,7 +8,7 @@ use utf8;
 
 #########################
 my ($js,$obj);
-my $pc = JSON::SIMD->new->use_simdjson(1);
+my $pc = JSON::SIMD->new->use_simdjson(0);
 
 $js  = '{"foo":0}';
 $obj = $pc->decode($js);

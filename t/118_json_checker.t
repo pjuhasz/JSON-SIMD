@@ -11,7 +11,7 @@ BEGIN { plan tests => 38 };
 use JSON::SIMD;
 
 # emulate JSON_checker default config
-my $json = JSON::SIMD->new->utf8->use_simdjson(1)->max_depth(32)->canonical;
+my $json = JSON::SIMD->new->utf8->use_simdjson(0)->max_depth(32)->canonical;
 
 binmode DATA;
 

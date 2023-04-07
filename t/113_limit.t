@@ -9,7 +9,7 @@ sub ok($;$) {
 
 my $def = 512;
 
-my $js = JSON::SIMD->new->use_simdjson(1);
+my $js = JSON::SIMD->new->use_simdjson(0);
 
 ok (!eval { $js->decode (("[" x ($def + 1)) . ("]" x ($def + 1))) });
 ok (ref $js->decode (("[" x $def) . ("]" x $def)));

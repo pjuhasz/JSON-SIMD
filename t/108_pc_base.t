@@ -8,7 +8,7 @@ use JSON::SIMD;
 
 my ($js,$obj);
 
-my $pc = JSON::SIMD->new->use_simdjson(1);
+my $pc = JSON::SIMD->new;
 
 $js  = q|{}|;
 

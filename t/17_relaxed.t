@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..10\n"; }
+BEGIN { $| = 1; print "1..11\n"; }
 
 use utf8;
 use JSON::SIMD;
@@ -21,6 +21,5 @@ ok (!eval { $json->decode ('{,}') });
 
 ok ('[1,2]' eq encode_json $json->decode ("[1#,2\n ,2,#  ]  \n\t]"));
 
-
-ok (!eval { my $simdjson = JSON::SIMD->new->relaxed->use_simdjson; });
-ok (!eval { my $simdjson = JSON::SIMD->new->use_simdjson->relaxed; });
+ok (!eval { my $simdjson = JSON::SIMD->new->relaxed->use_simdjson(1); });
+ok ( eval { my $simdjson = JSON::SIMD->new->use_simdjson(1)->relaxed; });

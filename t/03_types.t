@@ -59,23 +59,23 @@ my @sparse; @sparse[0,3] = (1, 4);
 ok ("[1,null,null,4]" eq encode_json \@sparse);
 
 
-ok (!defined JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('null'));
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('true') == 1);
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('false') == 0);
+ok (!defined JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('null'));
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('true') == 1);
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('false') == 0);
 
-$true  = JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('true');
+$true  = JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('true');
 ok ($true eq 1);
 ok (Types::Serialiser::is_bool $true);
-$false = JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('false');
+$false = JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('false');
 ok ($false == !$true);
 ok (Types::Serialiser::is_bool $false);
 ok (++$false == 1);
 ok (!Types::Serialiser::is_bool $false);
 
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('5') == 5);
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('-5') == -5);
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('5e1') == 50);
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('-333e+0') == -333);
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('2.5') == 2.5);
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('5') == 5);
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('-5') == -5);
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('5e1') == 50);
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('-333e+0') == -333);
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('2.5') == 2.5);
 
-ok (JSON::SIMD->new->use_simdjson->allow_nonref (1)->decode ('""') eq "");
+ok (JSON::SIMD->new->use_simdjson(0)->allow_nonref (1)->decode ('""') eq "");

@@ -10,25 +10,25 @@ sub ok($;$) {
 sub test($) {
    my $js;
 
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(0)->utf8->ascii->shrink->encode ([$_[0]]);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(0)->utf8->ascii->shrink->encode ([$_[0]]);
    ok ($_[0] eq ((decode_json $js)->[0]), 0);
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(0)->utf8->ascii->encode ([$_[0]]);
-   ok ($_[0] eq (JSON::SIMD->new->use_simdjson(1)->utf8->shrink->decode($js))->[0], 1);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(0)->utf8->ascii->encode ([$_[0]]);
+   ok ($_[0] eq (JSON::SIMD->new->use_simdjson(0)->utf8->shrink->decode($js))->[0], 1);
 
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(0)->utf8->shrink->encode ([$_[0]]);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(0)->utf8->shrink->encode ([$_[0]]);
    ok ($_[0] eq ((decode_json $js)->[0]), 2);
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(1)->utf8->encode ([$_[0]]);
-   ok ($_[0] eq (JSON::SIMD->new->use_simdjson(1)->utf8->shrink->decode($js))->[0], 3);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(1)->utf8->encode ([$_[0]]);
+   ok ($_[0] eq (JSON::SIMD->new->use_simdjson(0)->utf8->shrink->decode($js))->[0], 3);
 
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(1)->ascii->encode ([$_[0]]);
-   ok ($_[0] eq JSON::SIMD->new->use_simdjson(1)->decode ($js)->[0], 4);
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(0)->ascii->encode ([$_[0]]);
-   ok ($_[0] eq JSON::SIMD->new->use_simdjson(1)->shrink->decode ($js)->[0], 5);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(1)->ascii->encode ([$_[0]]);
+   ok ($_[0] eq JSON::SIMD->new->use_simdjson(0)->decode ($js)->[0], 4);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(0)->ascii->encode ([$_[0]]);
+   ok ($_[0] eq JSON::SIMD->new->use_simdjson(0)->shrink->decode ($js)->[0], 5);
 
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(1)->shrink->encode ([$_[0]]);
-   ok ($_[0] eq JSON::SIMD->new->use_simdjson(1)->decode ($js)->[0], 6);
-   $js = JSON::SIMD->new->use_simdjson(1)->allow_nonref(0)->encode ([$_[0]]);
-   ok ($_[0] eq JSON::SIMD->new->use_simdjson(1)->shrink->decode ($js)->[0], 7);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(1)->shrink->encode ([$_[0]]);
+   ok ($_[0] eq JSON::SIMD->new->use_simdjson(0)->decode ($js)->[0], 6);
+   $js = JSON::SIMD->new->use_simdjson(0)->allow_nonref(0)->encode ([$_[0]]);
+   ok ($_[0] eq JSON::SIMD->new->use_simdjson(0)->shrink->decode ($js)->[0], 7);
 }
 
 srand 0; # doesn't help too much, but its at least more deterministic

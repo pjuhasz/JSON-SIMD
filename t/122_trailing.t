@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..74\n"; }
+BEGIN { $| = 1; print "1..78\n"; }
 
 use utf8;
 use JSON::SIMD;
@@ -19,9 +19,13 @@ for (
     [ q/111 foo/,           'garbage', 3],
     [ q/111{/,              'garbage', 3],
     [ q/111}/,              'garbage', 3],
+    [ qq/111\x00/,          'garbage', 3],
     [ q/true foo/,          'garbage', 4],
     [ q/false foo/,         'garbage', 5],
     [ q/null foo/,          'garbage', 4],
+    [ qq/true\x00/,         'garbage', 4],
+    [ qq/false\x00/,        'garbage', 5],
+    [ qq/null\x00/,         'garbage', 4],
     [ q/[1, 2] foo/,        'garbage', 7],
     [ q/[1, 2] foo ]/,      'garbage', 7],
     [ q/[1, 2] foo ] /,     'garbage', 7],

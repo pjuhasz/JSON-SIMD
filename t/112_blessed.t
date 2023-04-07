@@ -14,7 +14,7 @@ sub XX::TO_JSON {
    {__,""}
 }
 
-my $js = JSON::SIMD->new->use_simdjson(1);
+my $js = JSON::SIMD->new->use_simdjson(0);
 
 eval { $js->encode ($o1) }; ok ($@ =~ /allow_blessed/);
 eval { $js->encode ($o2) }; ok ($@ =~ /allow_blessed/);

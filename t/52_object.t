@@ -48,5 +48,7 @@ print $enc eq '("JSON::SIMD::freeze")[3,1,2]' ? "" : "not ", "ok 12 # $enc\n";
 $dec = $json->decode ($enc);
 print $dec eq 777 ? "" : "not ", "ok 19\n";
 
-print "ok 20\n";
+ok (!eval { my $simdjson = JSON::SIMD->new->allow_tags->use_simdjson(1); });
+
+print "ok 21\n";
 

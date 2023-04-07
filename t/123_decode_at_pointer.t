@@ -63,5 +63,5 @@ sub test {
 	eval {$J->decode_at_pointer('1111', '/bar');}; ok $@ =~ /only the empty path is allowed for scalar documents/;
 }
 
-test(JSON::SIMD->new->use_simdjson, 0);
-test(JSON::SIMD->new, 1);
+test(JSON::SIMD->new->use_simdjson(0), 1);
+test(JSON::SIMD->new, 0);
