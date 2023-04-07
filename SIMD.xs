@@ -118,7 +118,7 @@ enum {
 INLINE void
 json_init (JSON *json)
 {
-  static const JSON init = { F_ALLOW_NONREF, 512 };
+  static const JSON init = { F_ALLOW_NONREF|F_USE_SIMDJSON, 512 };
 
   *json = init;
   json->simdjson = simdjson_init();
