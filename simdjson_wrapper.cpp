@@ -166,9 +166,10 @@ static inline bool validate_ascii(const char *buf, size_t len) noexcept {
 // XXX keep in sync w XS.xs
 #define F_HOOK           0x00080000UL // some hooks exist, so slow-path processing
 
+// There is some special kind of perversion going on that both C++'s advanced template magic
+// and threaded Perl's THX_ voodoo are present, yet the whole thing still works.
 template<typename T>
-static SV* recursive_parse_json(dec_t *dec, T element) {
-  dTHX;
+static SV* recursive_parse_json(pTHX_ dec_t *dec, T element) {
   SV* res = NULL;
 
   ondemand::json_type t;
@@ -188,7 +189,7 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         auto err = child.get(val);
         ERROR_RETURN_CLEANUP(av);
 
-        SV *elem = recursive_parse_json(dec, val);
+        SV *elem = recursive_parse_json(aTHX_ dec, val);
         NULL_RETURN_CLEANUP(elem, av);
 
         av_push(av, elem);
@@ -215,7 +216,7 @@ static SV* recursive_parse_json(dec_t *dec, T element) {
         err = field.value().get(val);
         ERROR_RETURN_CLEANUP(hv);
 
-        SV *sv_value = recursive_parse_json(dec, val);
+        SV *sv_value = recursive_parse_json(aTHX_ dec, val);
         NULL_RETURN_CLEANUP(sv_value, hv);
 
         // simdjson always returns the key as an UTF-8-encoded string
@@ -455,7 +456,7 @@ SV * simdjson_decode(dec_t *dec) {
       dec->error_line_number = __LINE__;
       ERROR_RETURN_SAVE_MSG;
     } else {
-      sv = recursive_parse_json<ondemand::document&>(dec, doc);
+      sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc);
       // For scalar documents it can detect trailing content _most of the time_,
       // but re-parsing the content with iterate_many doesn't work for some reason,
       // and even if it worked, there are cases where iterate_many fails (e.g. '1111 }', it says empty json (as of simdjson 3.1.6).
@@ -466,7 +467,7 @@ SV * simdjson_decode(dec_t *dec) {
 
         err = parser->iterate(SvPVX(dec->input), size, SvLEN(dec->input)).get(doc2);
         ERROR_RETURN_SAVE_MSG;
-        sv = recursive_parse_json<ondemand::document&>(dec, doc2);
+        sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc2);
         location = SvPVX(dec->input) + size;
 
       } else {
@@ -513,7 +514,7 @@ SV * simdjson_decode(dec_t *dec) {
       }
       ERROR_RETURN_SAVE_MSG;
 
-      sv = recursive_parse_json<ondemand::value>(dec, val);
+      sv = recursive_parse_json<ondemand::value>(aTHX_ dec, val);
       location = get_location(doc_ref);
 
       // doc_ref.current_location may be null
@@ -526,7 +527,7 @@ SV * simdjson_decode(dec_t *dec) {
     } else {
       ERROR_RETURN_SAVE_MSG;
 
-      sv = recursive_parse_json<ondemand::value>(dec, val);
+      sv = recursive_parse_json<ondemand::value>(aTHX_ dec, val);
       location = get_location(doc);
     }
   }
