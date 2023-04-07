@@ -83,7 +83,7 @@
 #define ERR_NESTING_EXCEEDED "json text or perl structure exceeds maximum nesting level (max_depth set too low?)"
 
 #ifdef USE_ITHREADS
-# define JSON_STASH (expect_true (json_stash) ? json_stash : gv_stashpv ("JSON::XS", 1))
+# define JSON_STASH (expect_true (json_stash) ? json_stash : gv_stashpv ("JSON::SIMD", 1))
 # define BOOL_STASH (expect_true (bool_stash) ? bool_stash : gv_stashpv ("Types::Serialiser::Boolean", 1))
 # define GET_BOOL(value) (expect_true (bool_ ## value) ? bool_ ## value : get_bool ("Types::Serialiser::" # value))
 #else
@@ -95,7 +95,7 @@
 // the amount of HEs to allocate on the stack, when sorting keys
 #define STACK_HES 64
 
-static HV *json_stash, *bool_stash; // JSON::XS::, Types::Serialiser::Boolean::
+static HV *json_stash, *bool_stash; // JSON::SIMD::, Types::Serialiser::Boolean::
 static SV *bool_false, *bool_true;
 static SV *sv_json;
 
@@ -160,7 +160,7 @@ strlen_sum (STRLEN l1, STRLEN l2)
   size_t sum = l1 + l2;
 
   if (sum < (size_t)l2 || sum != (size_t)(STRLEN)sum)
-    croak ("JSON::XS: string size overflow");
+    croak ("JSON::SIMD: string size overflow");
 
   return sum;
 }
@@ -2196,7 +2196,7 @@ interrupt:
 /////////////////////////////////////////////////////////////////////////////
 // XS interface functions
 
-MODULE = JSON::XS		PACKAGE = JSON::XS
+MODULE = JSON::SIMD		PACKAGE = JSON::SIMD
 
 BOOT:
 {
@@ -2209,7 +2209,7 @@ BOOT:
             : i >= 'A' && i <= 'F' ? i - 'A' + 10
             : -1;
 
-	json_stash = gv_stashpv ("JSON::XS"                  , 1);
+	json_stash = gv_stashpv ("JSON::SIMD"                , 1);
 	bool_stash = gv_stashpv ("Types::Serialiser::Boolean", 1);
         bool_false = get_bool ("Types::Serialiser::false");
         bool_true  = get_bool ("Types::Serialiser::true");
@@ -2217,7 +2217,7 @@ BOOT:
         sv_json = newSVpv ("JSON", 0);
         SvREADONLY_on (sv_json);
 
-        CvNODEBUG_on (get_cv ("JSON::XS::incr_text", 0)); /* the debugger completely breaks lvalue subs */
+        CvNODEBUG_on (get_cv ("JSON::SIMD::incr_text", 0)); /* the debugger completely breaks lvalue subs */
 }
 
 PROTOTYPES: DISABLE
@@ -2240,7 +2240,7 @@ void new (char *klass)
         json_init ((JSON *)SvPVX (pv));
         XPUSHs (sv_2mortal (sv_bless (
            newRV_noinc (pv),
-           strEQ (klass, "JSON::XS") ? JSON_STASH : gv_stashpv (klass, 1)
+           strEQ (klass, "JSON::SIMD") ? JSON_STASH : gv_stashpv (klass, 1)
         )));
 }
 

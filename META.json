@@ -12,7 +12,7 @@
       "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
       "version" : "2"
    },
-   "name" : "JSON-XS",
+   "name" : "JSON-SIMD",
    "no_index" : {
       "directory" : [
          "t",
@@ -27,7 +27,6 @@
       },
       "configure" : {
          "requires" : {
-            "Canary::Stability" : "0",
             "ExtUtils::MakeMaker" : "6.52"
          }
       },
@@ -39,5 +38,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "4.03"
+   "version" : "4.03.1"
 }
