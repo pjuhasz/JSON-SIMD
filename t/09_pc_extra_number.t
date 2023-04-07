@@ -1,14 +1,14 @@
-# copied over from JSON::PC and modified to use JSON::XS
+# copied over from JSON::PC and modified to use JSON::SIMD
 
 use Test::More;
 use strict;
 BEGIN { plan tests => 6 };
-use JSON::XS;
+use JSON::SIMD;
 use utf8;
 
 #########################
 my ($js,$obj);
-my $pc = new JSON::XS;
+my $pc = new JSON::SIMD;
 
 $js  = '{"foo":0}';
 $obj = $pc->decode($js);

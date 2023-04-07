@@ -1,8 +1,8 @@
 BEGIN { $| = 1; print "1..4\n"; }
 
-use JSON::XS;
+use JSON::SIMD;
 
-my $xs = JSON::XS->new->latin1->allow_nonref->use_simdjson(1);
+my $xs = JSON::SIMD->new->latin1->allow_nonref->use_simdjson(1);
 
 eval { $xs->decode ("[] ") };
 print $@ ? "not " : "", "ok 1\n";

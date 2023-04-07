@@ -5,7 +5,7 @@ no warnings;
 use Test::More;
 BEGIN { plan tests => 745 };
 
-use JSON::XS;
+use JSON::SIMD;
 
 sub splitter {
    my ($coder, $text) = @_;
@@ -32,16 +32,16 @@ sub splitter {
    }
 }
 
-splitter +JSON::XS->new->use_simdjson(1)->allow_nonref (0), '  ["x\\"","\\u1000\\\\n\\nx",1,{"\\\\" :5 , "": "x"}]';
-splitter +JSON::XS->new->use_simdjson(1)->allow_nonref (0), '[ "x\\"","\\u1000\\\\n\\nx" , 1,{"\\\\ " :5 , "": " x"} ] ';
-splitter +JSON::XS->new->use_simdjson(1)                  , '"test"';
-splitter +JSON::XS->new->use_simdjson(1)                  , ' "5" ';
-splitter +JSON::XS->new->use_simdjson(1)                  , '-1e5';
-splitter +JSON::XS->new->use_simdjson(1)                  , ' 0.00E+00 ';
+splitter +JSON::SIMD->new->use_simdjson(1)->allow_nonref (0), '  ["x\\"","\\u1000\\\\n\\nx",1,{"\\\\" :5 , "": "x"}]';
+splitter +JSON::SIMD->new->use_simdjson(1)->allow_nonref (0), '[ "x\\"","\\u1000\\\\n\\nx" , 1,{"\\\\ " :5 , "": " x"} ] ';
+splitter +JSON::SIMD->new->use_simdjson(1)                  , '"test"';
+splitter +JSON::SIMD->new->use_simdjson(1)                  , ' "5" ';
+splitter +JSON::SIMD->new->use_simdjson(1)                  , '-1e5';
+splitter +JSON::SIMD->new->use_simdjson(1)                  , ' 0.00E+00 ';
 
 {
    my $text = '[5],{"":1} , [ 1,2, 3], {"3":null}';
-   my $coder = JSON::XS->new->use_simdjson(1);
+   my $coder = JSON::SIMD->new->use_simdjson(1);
    for (0 .. length $text) {
       my $a = substr $text, 0, $_;
       my $b = substr $text, $_;
@@ -65,7 +65,7 @@ splitter +JSON::XS->new->use_simdjson(1)                  , ' 0.00E+00 ';
 
 {
    my $text = '[x][5]';
-   my $coder = JSON::XS->new->use_simdjson(1);
+   my $coder = JSON::SIMD->new->use_simdjson(1);
    $coder->incr_parse ($text);
    ok (!eval { $coder->incr_parse }, "sparse1");
    ok (!eval { $coder->incr_parse }, "sparse2");
@@ -74,20 +74,20 @@ splitter +JSON::XS->new->use_simdjson(1)                  , ' 0.00E+00 ';
 }
 
 {
-   my $coder = JSON::XS->new->use_simdjson(1)->max_size (5);
+   my $coder = JSON::SIMD->new->use_simdjson(1)->max_size (5);
    ok (!$coder->incr_parse ("[    "), "incsize1");
    eval { !$coder->incr_parse ("]  ") }; ok ($@ =~ /6 bytes/, "incsize2 $@");
 }
 
 {
-   my $coder = JSON::XS->new->use_simdjson(1)->max_depth (3);
+   my $coder = JSON::SIMD->new->use_simdjson(1)->max_depth (3);
    ok (!$coder->incr_parse ("[[["), "incdepth1");
    eval { !$coder->incr_parse (" [] ") }; ok ($@ =~ /maximum nesting/, "incdepth2 $@");
 }
 
 # contributed by yuval kogman, reformatted to fit style
 {
-   my $coder = JSON::XS->new->use_simdjson(1);
+   my $coder = JSON::SIMD->new->use_simdjson(1);
    
    my $res = eval { $coder->incr_parse("]") };
    my $e = $@; # test more clobbers $@, we need it twice

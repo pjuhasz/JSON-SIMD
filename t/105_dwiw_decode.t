@@ -1,6 +1,6 @@
 #! perl
 
-# copied over from JSON::DWIW and modified to use JSON::XS
+# copied over from JSON::DWIW and modified to use JSON::SIMD
 
 # Creation date: 2007-02-20 21:54:09
 # Authors: don
@@ -13,11 +13,11 @@ use Test;
 {
     BEGIN { plan tests => 7 }
 
-    use JSON::XS;
+    use JSON::SIMD;
 
     my $json_str = '{"var1":"val1","var2":["first_element",{"sub_element":"sub_val","sub_element2":"sub_val2"}],"var3":"val3"}';
 
-    my $json_obj = JSON::XS->new->use_simdjson(1)->allow_nonref(1);
+    my $json_obj = JSON::SIMD->new->use_simdjson(1)->allow_nonref(1);
     my $data = $json_obj->decode($json_str);
 
     my $pass = 1;

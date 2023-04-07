@@ -1,7 +1,7 @@
 BEGIN { $| = 1; print "1..38\n"; }
 
 use utf8;
-use JSON::XS;
+use JSON::SIMD;
 no warnings;
 
 our $test;
@@ -63,5 +63,5 @@ sub test {
 	eval {$J->decode_at_pointer('1111', '/bar');}; ok $@ =~ /only the empty path is allowed for scalar documents/;
 }
 
-test(JSON::XS->new->use_simdjson, 0);
-test(JSON::XS->new, 1);
+test(JSON::SIMD->new->use_simdjson, 0);
+test(JSON::SIMD->new, 1);

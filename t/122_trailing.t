@@ -1,7 +1,7 @@
 BEGIN { $| = 1; print "1..74\n"; }
 
 use utf8;
-use JSON::XS;
+use JSON::SIMD;
 no warnings;
 
 our $test;
@@ -44,11 +44,11 @@ for (
 ) {
     my ($json, $error, $offset) = @$_;
     my $got_offset; 
-    eval { JSON::XS->new->use_simdjson(1)->decode($json) }; 
+    eval { JSON::SIMD->new->use_simdjson(1)->decode($json) }; 
     ok $@ =~ /$error/
         or warn "# $json   $@";
 
-    eval { (undef, $got_offset) = JSON::XS->new->use_simdjson(1)->decode_prefix($json) };
+    eval { (undef, $got_offset) = JSON::SIMD->new->use_simdjson(1)->decode_prefix($json) };
     if ($error eq 'garbage') {
         ok !$@
             or warn "# $json   $@";;

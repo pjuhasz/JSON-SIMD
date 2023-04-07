@@ -1,15 +1,15 @@
 #! perl
 
-# copied over from JSON::PC and modified to use JSON::XS
+# copied over from JSON::PC and modified to use JSON::SIMD
 
 use strict;
 use Test::More;
 BEGIN { plan tests => 9 };
 
-use JSON::XS;
+use JSON::SIMD;
 
 my ($js,$obj,$json);
-my $pc = new JSON::XS;
+my $pc = new JSON::SIMD;
 
 $obj = {foo => "bar"};
 $js = $pc->encode($obj);

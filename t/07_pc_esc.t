@@ -2,18 +2,18 @@
 # このファイルのエンコーディングはUTF-8
 #
 
-# copied over from JSON::PC and modified to use JSON::XS
+# copied over from JSON::PC and modified to use JSON::SIMD
 
 use Test::More;
 use strict;
 use utf8;
 BEGIN { plan tests => 17 };
-use JSON::XS;
+use JSON::SIMD;
 
 #########################
 my ($js,$obj,$str);
 
-my $pc = new JSON::XS;
+my $pc = new JSON::SIMD;
 
 $obj = {test => qq|abc"def|};
 $str = $pc->encode($obj);
