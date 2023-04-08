@@ -3,6 +3,10 @@ Changes
 MANIFEST
 COPYING
 Makefile.PL
+simdjson_wrapper.h
+simdjson_wrapper.cpp
+simdjson.h
+simdjson.cpp
 SIMD.pm
 SIMD.xs
 SIMD/Boolean.pm
