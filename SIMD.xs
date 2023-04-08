@@ -99,12 +99,6 @@ static HV *json_stash, *bool_stash; // JSON::SIMD::, Types::Serialiser::Boolean:
 static SV *bool_false, *bool_true;
 static SV *sv_json;
 
-// global simdjson parser instance to be used in decode_json
-// (we initialize this at module load time and keep it around because
-//  initializing the parser is expensive)
-// FIXME find a better solution for this
-static simdjson_parser_t global_simdjson_instance;
-
 enum {
   INCR_M_WS = 0, // initial whitespace skipping, must be 0
   INCR_M_TFN,    // inside true/false/null
@@ -122,21 +116,11 @@ enum {
 // typedef struct { ... } JSON;
 
 INLINE void
-json_init_with_global_simdjson (JSON *json)
-{
-  static const JSON init = { F_ALLOW_NONREF|F_USE_SIMDJSON, 512 };
-
-  *json = init;
-  json->simdjson = global_simdjson_instance;
-}
-
-INLINE void
 json_init (JSON *json)
 {
   static const JSON init = { F_ALLOW_NONREF|F_USE_SIMDJSON, 512 };
 
   *json = init;
-  json->simdjson = simdjson_init();
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -2232,7 +2216,7 @@ BOOT:
         sv_json = newSVpv ("JSON", 0);
         SvREADONLY_on (sv_json);
 
-        global_simdjson_instance = simdjson_init();
+        simdjson_global_init();
 
         CvNODEBUG_on (get_cv ("JSON::SIMD::incr_text", 0)); /* the debugger completely breaks lvalue subs */
 }
@@ -2549,7 +2533,6 @@ void DESTROY (JSON *self)
         SvREFCNT_dec (self->cb_sk_object);
         SvREFCNT_dec (self->cb_object);
         SvREFCNT_dec (self->incr_text);
-        simdjson_destroy(self->simdjson);
 
 PROTOTYPES: ENABLE
 
@@ -2567,7 +2550,7 @@ void decode_json (SV *jsonstr)
 	PPCODE:
 {
         JSON json;
-        json_init_with_global_simdjson (&json);
+        json_init (&json);
         json.flags |= F_UTF8;
         PUTBACK; jsonstr = decode_json (jsonstr, &json, 0, 0); SPAGAIN;
         XPUSHs (jsonstr);

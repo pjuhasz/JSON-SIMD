@@ -9,9 +9,6 @@ extern "C" {
 #include "perl.h"
 #include "XSUB.h"
 
-// opaque type for the C++ simdjson object
-typedef void* simdjson_parser_t;
-
 // main JSON struct definition
 // also used by main XS code
 typedef struct {
@@ -27,8 +24,6 @@ typedef struct {
   STRLEN incr_pos; // the current offset into the text
   int incr_nest;   // {[]}-nesting level
   unsigned char incr_mode;
-
-  simdjson_parser_t simdjson;
 
   SV *v_false, *v_true;
 } JSON;
@@ -55,8 +50,7 @@ typedef struct
 SV * filter_object (dec_t *dec, SV *sv, HV* hv);
 
 // actual interface to simdjson decoder
-simdjson_parser_t simdjson_init();
-void simdjson_destroy(simdjson_parser_t self);
+void simdjson_global_init();
 SV* simdjson_decode(dec_t *dec);
 SV * simdjson_get_version();
 

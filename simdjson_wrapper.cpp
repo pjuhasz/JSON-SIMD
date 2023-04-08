@@ -1,9 +1,18 @@
 #include <iostream>
+#include <mutex>
 #include "simdjson.h"
 #define PERL_NO_GET_CONTEXT
 #include "simdjson_wrapper.h"
 
-using namespace simdjson; // optional
+using namespace simdjson;
+
+// global simdjson parser instance to be used in for all decodes
+// (we initialize this at module load time and keep it around because
+//  initializing the parser is expensive)
+static ondemand::parser *global_parser_instance;
+// we protect it with a mutex, because using Perl's thread-local storage
+// would be slower - at the cost of making this module effectively single-threaded
+static std::mutex global_mutex;
 
 // 256 errors ought to be enough for anybody - Bill Gates
 #define CUSTOM_ERROR_BASE 256
@@ -416,8 +425,8 @@ static void save_errormsg_location(dec_t *dec, char *location) {
   dec->end = SvEND(dec->input);
 }
 
-simdjson_parser_t simdjson_init() {
-  return new ondemand::parser;
+void simdjson_global_init() {
+  global_parser_instance = new ondemand::parser;
 }
 
 #define ERROR_RETURN_SAVE_MSG \
@@ -438,7 +447,8 @@ SV * simdjson_decode(dec_t *dec) {
 
   SvGROW(dec->input, SvCUR (dec->input) + SIMDJSON_PADDING);
 
-  ondemand::parser* parser = static_cast<ondemand::parser*>(dec->json.simdjson);
+  std::lock_guard<std::mutex> guard(global_mutex);
+  ondemand::parser* parser = global_parser_instance;
   ondemand::document doc;
   char *location = NULL;
 
@@ -533,11 +543,6 @@ SV * simdjson_decode(dec_t *dec) {
   }
   save_errormsg_location(dec, location);
   return sv;
-}
-
-void simdjson_destroy(simdjson_parser_t wrapper) {
-  ondemand::parser* parser = static_cast<ondemand::parser*>(wrapper);
-  delete parser;
 }
 
 SV * simdjson_get_version() {
