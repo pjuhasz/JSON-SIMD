@@ -449,58 +449,77 @@ SV * simdjson_decode(dec_t *dec) {
 
   std::lock_guard<std::mutex> guard(global_mutex);
   ondemand::parser* parser = global_parser_instance;
-  ondemand::document doc;
   char *location = NULL;
-
-  auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
-  ERROR_RETURN_SAVE_MSG;
-
   bool is_scalar = false;
-  err = doc.is_scalar().get(is_scalar);
-  ERROR_RETURN_SAVE_MSG;
+  bool problem_retry = false;
 
-  if (simdjson_unlikely(is_scalar)) {
-    if (dec->path && *(dec->path)) {
-      // don't parse anything, non-root path doesn't make sense with scalar values
-      dec->error_code = CERR_PATH_IN_SCALAR;
-      dec->error_line_number = __LINE__;
-      ERROR_RETURN_SAVE_MSG;
+  {
+    // doc will be destroyed at the end of the scope, so that we can call parser->iterate again
+    // if we have to retry (to catch certain error cases)
+    ondemand::document doc;
+
+    auto err = parser->iterate(SvPVX(dec->input), SvCUR(dec->input), SvLEN(dec->input)).get(doc);
+    ERROR_RETURN_SAVE_MSG;
+
+    err = doc.is_scalar().get(is_scalar);
+    ERROR_RETURN_SAVE_MSG;
+
+    if (simdjson_unlikely(is_scalar)) {
+      if (dec->path && *(dec->path)) {
+        // don't parse anything, non-root path doesn't make sense with scalar values
+        dec->error_code = CERR_PATH_IN_SCALAR;
+        dec->error_line_number = __LINE__;
+        ERROR_RETURN_SAVE_MSG;
+      } else {
+        sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc);
+
+        if (simdjson_unlikely(dec->error_code)) {
+          problem_retry = true;
+        } else {
+          location = get_location(doc);
+          if (simdjson_unlikely(SvCUR(dec->input) == 6)) {
+            // simdjson has a blind spot where it comes to the very specific document "false." where the . may be any non-structural char.
+            // FIXME remove this if block when upstream fixes it
+            char *p = SvPVX(dec->input);
+            if (p[0] == 'f' && p[1] == 'a' && p[2] == 'l' && p[3] == 's' && p[4] == 'e' &&
+              p[5] != 0x20 && p[5] != 0x0d && p[5] != 0x0a && p[5] != 0x09) {
+              location = p+5;
+            }
+          }
+        }
+      }
     } else {
-      sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc);
+      ondemand::value val;
+      if (simdjson_unlikely(dec->path)) {
+        err = doc.at_pointer(dec->path).get(val);
+      } else {
+        err = doc.get_value().get(val);
+      }
+      if (simdjson_unlikely(err == INCOMPLETE_ARRAY_OR_OBJECT)) {
+        problem_retry = 1;
+      } else {
+        ERROR_RETURN_SAVE_MSG;
+
+        sv = recursive_parse_json<ondemand::value>(aTHX_ dec, val);
+        location = get_location(doc);
+      }
+    }
+  }
+
+  if (simdjson_unlikely(problem_retry)) {
+    if (is_scalar) {
       // For scalar documents it can detect trailing content _most of the time_,
       // but re-parsing the content with iterate_many doesn't work for some reason,
       // and even if it worked, there are cases where iterate_many fails (e.g. '1111 }', it says empty json (as of simdjson 3.1.6).
       // So we have to find the end of the valid content ourselves and re-parse a truncated document, yet another desperate hack.
-      if (simdjson_unlikely(dec->error_code)) {
-        ondemand::document doc2;
-        size_t size = find_end_of_scalar(SvPVX(dec->input));
+      ondemand::document doc2;
+      size_t size = find_end_of_scalar(SvPVX(dec->input));
 
-        err = parser->iterate(SvPVX(dec->input), size, SvLEN(dec->input)).get(doc2);
-        ERROR_RETURN_SAVE_MSG;
-        sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc2);
-        location = SvPVX(dec->input) + size;
-
-      } else {
-        location = get_location(doc);
-        if (simdjson_unlikely(SvCUR(dec->input) == 6)) {
-          // simdjson has a blind spot where it comes to the very specific document "false." where the . may be any non-structural char.
-          // FIXME remove this block when upstream fixes it
-          char *p = SvPVX(dec->input);
-          if (p[0] == 'f' && p[1] == 'a' && p[2] == 'l' && p[3] == 's' && p[4] == 'e' &&
-            p[5] != 0x20 && p[5] != 0x0d && p[5] != 0x0a && p[5] != 0x09) {
-            location = p+5;
-          }
-        }
-      }
-    }
-  } else {
-    ondemand::value val;
-    if (simdjson_unlikely(dec->path)) {
-      err = doc.at_pointer(dec->path).get(val);
+      auto err = parser->iterate(SvPVX(dec->input), size, SvLEN(dec->input)).get(doc2);
+      ERROR_RETURN_SAVE_MSG;
+      sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc2);
+      location = SvPVX(dec->input) + size;
     } else {
-      err = doc.get_value().get(val);
-    }
-    if (simdjson_unlikely(err == INCOMPLETE_ARRAY_OR_OBJECT)) {
       // desperate, gnarly hack:
       // simdjson has fundamental limitations, because parse.iterate (in on demand mode)
       // can not distinguish between an incomplete document and a valid document with trailing garbage.
@@ -517,6 +536,8 @@ SV * simdjson_decode(dec_t *dec) {
         err = INCOMPLETE_ARRAY_OR_OBJECT;
         ERROR_RETURN_SAVE_MSG;
       }
+
+      ondemand::value val;
       if (dec->path) {
         err = doc_ref.at_pointer(dec->path).get(val);
       } else {
@@ -533,14 +554,9 @@ SV * simdjson_decode(dec_t *dec) {
       if (location == NULL) {
         location = SvEND(dec->input) - stream.truncated_bytes();
       }
-
-    } else {
-      ERROR_RETURN_SAVE_MSG;
-
-      sv = recursive_parse_json<ondemand::value>(aTHX_ dec, val);
-      location = get_location(doc);
     }
   }
+
   save_errormsg_location(dec, location);
   return sv;
 }
