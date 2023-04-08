@@ -22,20 +22,16 @@ JSON::SIMD - JSON serialising/deserialising, done correctly and faster
  $perl_scalar = $coder->decode ($unicode_json_text);
  $perl_scalar = $coder->decode_at_pointer ($unicode_json_text, '/just/a/part');
 
- # Note that JSON version 2.0 and above will automatically use JSON::SIMD
- # if available, at virtually no speed overhead either, so you should
- # be able to just:
- 
- use JSON;
-
- # and do the same things, except that you have a pure-perl fallback now.
-
 =head1 DESCRIPTION
 
 This module converts Perl data structures to JSON and vice versa. Its
 primary goal is to be I<correct> and its secondary goal is to be
 I<fast>. To reach the latter goal it was written in C. For extra speed,
-it uses simdjson, the fastest JSON parser currently available, for decoding.
+it uses simdjson, the fastest C++ JSON parser currently available,
+for decoding.
+
+This module is a fork of JSON::XS and works as a drop-in replacement in
+most cases. See the SIMDJSON section below for more information.
 
 See MAPPING, below, on how JSON::SIMD maps perl values to JSON values and
 vice versa.
@@ -68,9 +64,7 @@ feature).
 Compared to other JSON modules and other serialisers such as Storable,
 this module usually compares favourably in terms of speed, too.
 
-Optionally, this module can use simdjson L<https://simdjson.org/>,
-a recent C++ library that uses
-SIMD instructions available on modern processors to speed up decoding
+By default, this module uses the simdjson library to speed up decoding
 even more.
 
 =item * simple to use
@@ -104,6 +98,53 @@ use XSLoader;
 
 use Types::Serialiser ();
 
+=head1 SIMDJSON 
+
+Simdjson L<https://simdjson.org/> is a recent C++ library that uses
+SIMD instructions available on modern processors to parse JSON as fast as
+possible. It does this by separating the parsing into two stages: it first
+scans through the document very quickly, identifying the position of
+structural elements, but not fully validating the whole thing yet. It then
+provides an iterator for the user to process as much or as little of
+the document as required.
+
+Depending on the length and the structure of the document, the speedup
+may range from minor (for very short documents) to dramatic
+(for long documents, especially with long Unicode keys). See the Benchmarks
+section below for more information. Note that simdjson uses runtime
+dispatching to select the best implementation depending on the instruction
+sets available in your CPU, so your results may vary.
+
+The speedup is not as high as it may be expected from reading simdjson's
+own documentation, because this module has to decode and validate the
+entire document and produce a Perl data structure from it, and this requires
+additional processing and allocations on top of the cost of raw JSON parsing
+(but see the C<decode_at_pointer method).
+
+=head2 JSON::SIMD vs JSON::XS
+
+As mentioned before, this module is a fork of JSON::XS and retains all of
+its methods, functionality and, ahem, idiosynchrasies. In fact, the encoder
+part (the C<encode_json> function and the C<encode> method) is exactly the
+same as in JSON::XS, so it should behave in the same way.
+
+The decoder has been supplanted by one that uses simdjson, for extra speed,
+at the cost of higher memory usage. The legacy decoder from JSON::XS is
+available, though, for the object-oriented interface (see the C<use_simdjson>
+method).
+
+For valid documents, the simdjson decoder should produce the same Perl
+data structure as the legacy decoder. For invalid documents, errors
+will be reported differently, though, and the C<decode_prefix> method may return
+a different offset (because the simdjson parser consumes trailing whitespace).
+
+At this time JSON::SIMD is not supported by JSON, JSON::MaybeXS or any other
+wrapper or compatibity modules, you have C<use> it explicitly.
+
+It is the intent of JSON::SIMD's author to keep it compatible with JSON::XS
+to the extent possible. Future bugfixes to JSON::XS will likely be applied
+here, too.
+
 =head1 FUNCTIONAL INTERFACE
 
 The following convenience methods are provided by this module. They are
@@ -130,7 +171,7 @@ reference. Croaks on error.
 
 This function call is functionally identical to:
 
-   $perl_scalar = JSON::SIMD->new->utf8->decode ($json_text)
+   $perl_scalar = JSON::SIMD->new->utf8->use_simdjson->decode ($json_text)
 
 Except being faster.
 
@@ -219,21 +260,9 @@ be chained:
 =item $enabled = $json->get_use_simdjson
 
 If C<$enable> is true (or missing), the C<decode> method (as well as the
-incremental decoder) will use the alternative simdjson decoding backend.
+incremental decoder) will use the simdjson decoding backend.
 This is the default, use C<use_simdjson(0)> to switch back to the legacy
 decoder.
-
-Depending on the length and the structure of the document, the speedup
-may range from almost nothing (for very short documents) to dramatic
-(for long documents, especially with long Unicode keys). See the Benchmarks
-section below for more information. Note that simdjson uses runtime
-dispatching to select the best implementation depending on the instruction
-sets available in your CPU, so your results may vary.
-
-For valid documents, C<decode> in this mode should produce the same Perl
-data structure as with the legacy mode. For invalid documents, errors
-will be reported differently, and the C<decode_prefix> method may result
-a different offset (because the simdjson parser consumes trailing whitespace).
 
 This option is not compatible with C<allow_tags> and C<relaxed>, so
 using either of those options will silently disable simdjson mode and
@@ -475,7 +504,7 @@ This setting has currently no effect on tied hashes.
 
 =item $enabled = $json->get_allow_nonref
 
-Unlike other boolean options, this opotion is enabled by default beginning
+Unlike other boolean options, this option is enabled by default beginning
 with version C<4.0>. See L<SECURITY CONSIDERATIONS> for the gory details.
 
 If C<$enable> is true (or missing), then the C<encode> method can convert a
@@ -755,7 +784,7 @@ This is useful if your JSON texts are not delimited by an outer protocol
 and you need to know where the JSON text ends.
 
    JSON::SIMD->new->decode_prefix ("[1] the tail")
-   => ([1], 3)
+   => ([1], 4)
 
 =item $perl_scalar = $json->decode_at_pointer ($json_text, $path)
 
@@ -1506,8 +1535,8 @@ If you know of other incompatibilities, please let me know.
 
 =head2 JSON and YAML
 
-You often hear that JSON is a subset of YAML. This is, however, a mass
-hysteria(*) and very far from the truth (as of the time of this writing),
+You often hear that JSON is a subset of YAML. This is, however, very far
+from the truth (as of the time of this writing),
 so let me state it clearly: I<in general, there is no way to configure
 JSON::SIMD to output a data structure as valid YAML> that works in all
 cases.
@@ -1528,41 +1557,17 @@ Unicode BMP (basic multilingual page). YAML also does not allow C<\/>
 sequences in strings (which JSON::SIMD does not I<currently> generate, but
 other JSON generators might).
 
-There might be other incompatibilities that I am not aware of (or the YAML
-specification has been changed yet again - it does so quite often). In
+The YAML 1.1 specification is stricter about the syntax of numbers than JSON:
+C<1e2> is a valid JSON number, but YAML 1.1 requires it to be written as
+C<1.0e+2>. Being an invalid number, the YAML parser will treat it as a string.
+See L<https://john-millikin.com/json-is-not-a-yaml-subset> for more information,
+escpecially the section about YAML 1.2.
+
+There might be other incompatibilities that I am not aware of. In
 general you should not try to generate YAML with a JSON generator or vice
 versa, or try to parse JSON with a YAML parser or vice versa: chances are
 high that you will run into severe interoperability problems when you
 least expect it.
-
-=over
-
-=item (*)
-
-I have been pressured multiple times by Brian Ingerson (one of the
-authors of the YAML specification) to remove this paragraph, despite him
-acknowledging that the actual incompatibilities exist. As I was personally
-bitten by this "JSON is YAML" lie, I refused and said I will continue to
-educate people about these issues, so others do not run into the same
-problem again and again. After this, Brian called me a (quote)I<complete
-and worthless idiot>(unquote).
-
-In my opinion, instead of pressuring and insulting people who actually
-clarify issues with YAML and the wrong statements of some of its
-proponents, I would kindly suggest reading the JSON spec (which is not
-that difficult or long) and finally make YAML compatible to it, and
-educating users about the changes, instead of spreading lies about the
-real compatibility for many I<years> and trying to silence people who
-point out that it isn't true.
-
-Addendum/2009: the YAML 1.2 spec is still incompatible with JSON, even
-though the incompatibilities have been documented (and are known to Brian)
-for many years and the spec makes explicit claims that YAML is a superset
-of JSON. It would be so easy to fix, but apparently, bullying people and
-corrupting userdata is so much easier.
-
-=back
-
 
 =head2 SPEED
 
@@ -1812,7 +1817,7 @@ When you have trouble decoding JSON generated by this module using other
 decoders, then it is very likely that you have an encoding mismatch or the
 other decoder is broken.
 
-When decoding, C<JSON::XS> is strict by default and will likely catch all
+When decoding, C<JSON::SIMD> is strict by default and will likely catch all
 errors. There are currently two settings that change this, and these are 
 only relevant to the legacy decoder: C<relaxed>
 makes C<JSON::SIMD> accept (but not generate) some non-standard extensions,
@@ -1868,8 +1873,13 @@ with character escapes, and the constructor arguments must be non-empty.
 
 This module is I<not> guaranteed to be ithread (or MULTIPLICITY-) safe
 and there are no plans to change this. Note that perl's builtin so-called
-threads/ithreads are officially deprecated and should not be used.
+threads/ithreads are officially discouraged and should not be used.
 
+The simdjson decoder, in itself, is thread-safe, however, it is limited to
+single-thread use in practice, because it uses a mutex to protect against
+concurrent usage. This design, while probably controversial, was chosen
+to avoid the cost of using thread-local storage and optimize for the more
+common case of single-thread usage.
 
 =head1 THE PERILS OF SETLOCALE
 
@@ -1891,7 +1901,23 @@ afterwards.
 
 =head1 SOME HISTORY
 
-TODO replace this chapter entirely?
+The idea for this module came in 2023 when I learned about
+simdjson, and found that one particular language is conspicuously missing
+from the list of bindings and ports. The impulse to remedy that situation
+and produce a working Perl binding, bringing the latest and greatest
+advances in JSON parsing to Perl users, resulted in this module.
+
+JSON::XS was chosen as the basis for the fork because I has been
+using that module at $work and elsewhere without problems, so preserving
+compatibility with it was seen as an important goal.
+
+I had misgivings about publishing a fork, because, frankly, the world does
+not need yet another JSON parsing Perl module at this time. Yet, the potential
+speed gains, especially the ability to decode just a part of a document,
+offset the problems associated with a fork, possibly making it worthwhile.
+
+(The remaining paragraphs are from JSON::XS's manual, preserved here for
+historical authenticity. The opinions expressed below are Marc Lehmann's.)
 
 At the time this module (the original JSON::XS, that is) was created
 there already were a number of JSON modules available on CPAN, so what
@@ -1915,8 +1941,6 @@ weren't actually bugs, while spreading FUD about this module without
 actually giving any details on his accusations. You be the judge, but
 in my personal opinion, if you want quality, you will stay away from
 dangerous forks like that.
-
-TODO new paragraph
 
 =head1 BUGS
 
@@ -1944,12 +1968,20 @@ XSLoader::load "JSON::SIMD", $VERSION;
 
 The F<json_simd> command line utility for quick experiments.
 
-=head1 AUTHOR
+=head1 AUTHORS
 
+ JSON::XS original author:
  Marc Lehmann <schmorp@schmorp.de>
  http://home.schmorp.de/
 
-TODO simdjson, me
+ Simdjson authors:
+ Daniel Lemire
+ Geoff Langdale
+ John Keiser
+ https://simdjson.org/
+
+ JSON::SIMD
+ Péter Juhász <peter.juhasz83@gmail.com>
 
 =cut
 
