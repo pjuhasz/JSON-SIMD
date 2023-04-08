@@ -119,7 +119,7 @@ The speedup is not as high as it may be expected from reading simdjson's
 own documentation, because this module has to decode and validate the
 entire document and produce a Perl data structure from it, and this requires
 additional processing and allocations on top of the cost of raw JSON parsing
-(but see the C<decode_at_pointer method).
+(but see the C<decode_at_pointer> method).
 
 =head2 JSON::SIMD vs JSON::XS
 
@@ -247,7 +247,7 @@ decoding style, within the limits of supported formats.
 Creates a new JSON::SIMD object that can be used to de/encode JSON
 strings. All boolean flags described below are by default I<disabled>
 (with the exception of C<allow_nonref>, which defaults to I<enabled> since
-version C<4.0>).
+version C<4.0> of JSON::XS, and C<use_simdjson> in this module).
 
 The mutators for flags all return the JSON object again and thus calls can
 be chained:
@@ -813,7 +813,7 @@ slashes. The root path (that selects the entire document) is the empty string,
 not a lone slash. For a complete description of the syntax, including
 escaping with keys that contain slashes, refer to the RFC text.
 
-One limitation of this method is that it the path argument expects
+One limitation of this method is that the path argument expects
 I<unescaped> object keys. E.g. for the JSON document
 
    {"k\u0065y":"value"}
@@ -1879,7 +1879,7 @@ The simdjson decoder, in itself, is thread-safe, however, it is limited to
 single-thread use in practice, because it uses a mutex to protect against
 concurrent usage. This design, while probably controversial, was chosen
 to avoid the cost of using thread-local storage and optimize for the more
-common case of single-thread usage.
+common case of single-thread usage instead.
 
 =head1 THE PERILS OF SETLOCALE
 
@@ -1948,8 +1948,6 @@ While the goal of this module is to be correct, that unfortunately does
 not mean it's bug-free, only that I think its design is bug-free. If you
 keep reporting bugs they will be fixed swiftly, though.
 
-TODO address etc
-
 =cut
 
 BEGIN {
@@ -1981,7 +1979,7 @@ The F<json_simd> command line utility for quick experiments.
  https://simdjson.org/
 
  JSON::SIMD
- Péter Juhász <peter.juhasz83@gmail.com>
+ Pe'ter Juha'sz <peter.juhasz83@gmail.com>
 
 =cut
 

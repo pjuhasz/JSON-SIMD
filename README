@@ -1,11 +1,8 @@
 NAME
-    JSON::XS - JSON serialising/deserialising, done correctly and fast
-
-    JSON::XS - 正しくて高速な JSON シリアライザ/デシリアライザ
-    (http://fleur.hio.jp/perldoc/mix/lib/JSON/XS.html)
+    JSON::SIMD - JSON serialising/deserialising, done correctly and faster
 
 SYNOPSIS
-     use JSON::XS;
+     use JSON::SIMD;
 
      # exported functions, they croak on error
      # and expect/generate UTF-8
@@ -15,25 +12,25 @@ SYNOPSIS
 
      # OO-interface
 
-     $coder = JSON::XS->new->ascii->pretty->allow_nonref;
+     $coder = JSON::SIMD->new->ascii->pretty->allow_nonref;
      $pretty_printed_unencoded = $coder->encode ($perl_scalar);
      $perl_scalar = $coder->decode ($unicode_json_text);
 
-     # Note that JSON version 2.0 and above will automatically use JSON::XS
-     # if available, at virtually no speed overhead either, so you should
-     # be able to just:
- 
-     use JSON;
-
-     # and do the same things, except that you have a pure-perl fallback now.
+     $coder = JSON::SIMD->new->use_simdjson;
+     $perl_scalar = $coder->decode ($unicode_json_text);
+     $perl_scalar = $coder->decode_at_pointer ($unicode_json_text, '/just/a/part');
 
 DESCRIPTION
     This module converts Perl data structures to JSON and vice versa. Its
     primary goal is to be *correct* and its secondary goal is to be *fast*.
-    To reach the latter goal it was written in C.
+    To reach the latter goal it was written in C. For extra speed, it uses
+    simdjson, the fastest C++ JSON parser currently available, for decoding.
 
-    See MAPPING, below, on how JSON::XS maps perl values to JSON values and
-    vice versa.
+    This module is a fork of JSON::XS and works as a drop-in replacement in
+    most cases. See the SIMDJSON section below for more information.
+
+    See MAPPING, below, on how JSON::SIMD maps perl values to JSON values
+    and vice versa.
 
   FEATURES
     *   correct Unicode handling
@@ -62,6 +59,9 @@ DESCRIPTION
         Storable, this module usually compares favourably in terms of speed,
         too.
 
+        By default, this module uses the simdjson library to speed up
+        decoding even more.
+
     *   simple to use
 
         This module has both a simple functional interface as well as an
@@ -76,6 +76,52 @@ DESCRIPTION
         want to read that stuff). Or you can combine those features in
         whatever way you like.
 
+SIMDJSON
+    Simdjson <https://simdjson.org/> is a recent C++ library that uses SIMD
+    instructions available on modern processors to parse JSON as fast as
+    possible. It does this by separating the parsing into two stages: it
+    first scans through the document very quickly, identifying the position
+    of structural elements, but not fully validating the whole thing yet. It
+    then provides an iterator for the user to process as much or as little
+    of the document as required.
+
+    Depending on the length and the structure of the document, the speedup
+    may range from minor (for very short documents) to dramatic (for long
+    documents, especially with long Unicode keys). See the Benchmarks
+    section below for more information. Note that simdjson uses runtime
+    dispatching to select the best implementation depending on the
+    instruction sets available in your CPU, so your results may vary.
+
+    The speedup is not as high as it may be expected from reading simdjson's
+    own documentation, because this module has to decode and validate the
+    entire document and produce a Perl data structure from it, and this
+    requires additional processing and allocations on top of the cost of raw
+    JSON parsing (but see the "decode_at_pointer" method).
+
+  JSON::SIMD vs JSON::XS
+    As mentioned before, this module is a fork of JSON::XS and retains all
+    of its methods, functionality and, ahem, idiosynchrasies. In fact, the
+    encoder part (the "encode_json" function and the "encode" method) is
+    exactly the same as in JSON::XS, so it should behave in the same way.
+
+    The decoder has been supplanted by one that uses simdjson, for extra
+    speed, at the cost of higher memory usage. The legacy decoder from
+    JSON::XS is available, though, for the object-oriented interface (see
+    the "use_simdjson" method).
+
+    For valid documents, the simdjson decoder should produce the same Perl
+    data structure as the legacy decoder. For invalid documents, errors will
+    be reported differently, though, and the "decode_prefix" method may
+    return a different offset (because the simdjson parser consumes trailing
+    whitespace).
+
+    At this time JSON::SIMD is not supported by JSON, JSON::MaybeXS or any
+    other wrapper or compatibity modules, you have "use" it explicitly.
+
+    It is the intent of JSON::SIMD's author to keep it compatible with
+    JSON::XS to the extent possible. Future bugfixes to JSON::XS will likely
+    be applied here, too.
+
 FUNCTIONAL INTERFACE
     The following convenience methods are provided by this module. They are
     exported by default:
@@ -86,7 +132,7 @@ FUNCTIONAL INTERFACE
 
         This function call is functionally identical to:
 
-           $json_text = JSON::XS->new->utf8->encode ($perl_scalar)
+           $json_text = JSON::SIMD->new->utf8->encode ($perl_scalar)
 
         Except being faster.
 
@@ -97,9 +143,18 @@ FUNCTIONAL INTERFACE
 
         This function call is functionally identical to:
 
-           $perl_scalar = JSON::XS->new->utf8->decode ($json_text)
+           $perl_scalar = JSON::SIMD->new->utf8->use_simdjson->decode ($json_text)
 
         Except being faster.
+
+    $version_string = JSON::SIMD::simdjson_version
+        Returns a string with the version of the embedded simdjson library
+        and the currently active implementation. E.g.
+
+           v3.1.6 haswell(Intel/AMD AVX2)
+
+        This function is not exported, you must call it as
+        "JSON::SIMD::simdjson_version".
 
 A FEW NOTES ON UNICODE AND PERL
     Since this often leads to confusion, here are a few very clear words on
@@ -144,17 +199,30 @@ OBJECT-ORIENTED INTERFACE
     The object oriented interface lets you configure your own encoding or
     decoding style, within the limits of supported formats.
 
-    $json = new JSON::XS
-        Creates a new JSON::XS object that can be used to de/encode JSON
+    $json = JSON::SIMD->new
+        Creates a new JSON::SIMD object that can be used to de/encode JSON
         strings. All boolean flags described below are by default *disabled*
         (with the exception of "allow_nonref", which defaults to *enabled*
-        since version 4.0).
+        since version 4.0 of JSON::XS, and "use_simdjson" in this module).
 
         The mutators for flags all return the JSON object again and thus
         calls can be chained:
 
-           my $json = JSON::XS->new->utf8->space_after->encode ({a => [1,2]})
+           my $json = JSON::SIMD->new->utf8->space_after->encode ({a => [1,2]})
            => {"a": [1, 2]}
+
+    $json = $json->use_simdjson ([$enable])
+    $enabled = $json->get_use_simdjson
+        If $enable is true (or missing), the "decode" method (as well as the
+        incremental decoder) will use the simdjson decoding backend. This is
+        the default, use use_simdjson(0) to switch back to the legacy
+        decoder.
+
+        This option is not compatible with "allow_tags" and "relaxed", so
+        using either of those options will silently disable simdjson mode
+        and the legacy decoder will be used as long as they are enabled.
+
+        This option has no effect on the encoder.
 
     $json = $json->ascii ([$enable])
     $enabled = $json->get_ascii
@@ -178,7 +246,7 @@ OBJECT-ORIENTED INTERFACE
         transmitted over a 7-bit channel, as the encoded JSON texts will not
         contain any 8 bit characters.
 
-          JSON::XS->new->ascii (1)->encode ([chr 0x10401])
+          JSON::SIMD->new->ascii (1)->encode ([chr 0x10401])
           => ["\ud801\udc01"]
 
     $json = $json->latin1 ([$enable])
@@ -207,7 +275,7 @@ OBJECT-ORIENTED INTERFACE
         to contain binary data efficiently in files or databases, not when
         talking to other JSON encoders/decoders.
 
-          JSON::XS->new->latin1->encode (["\x{89}\x{abc}"]
+          JSON::SIMD->new->latin1->encode (["\x{89}\x{abc}"]
           => ["\x{89}\\u0abc"]    # (perl syntax, U+abc escaped, U+89 not)
 
     $json = $json->utf8 ([$enable])
@@ -232,12 +300,12 @@ OBJECT-ORIENTED INTERFACE
         Example, output UTF-16BE-encoded JSON:
 
           use Encode;
-          $jsontext = encode "UTF-16BE", JSON::XS->new->encode ($object);
+          $jsontext = encode "UTF-16BE", JSON::SIMD->new->encode ($object);
 
         Example, decode UTF-32LE-encoded JSON:
 
           use Encode;
-          $object = JSON::XS->new->decode (decode "UTF-32LE", $jsontext);
+          $object = JSON::SIMD->new->decode (decode "UTF-32LE", $jsontext);
 
     $json = $json->pretty ([$enable])
         This enables (or disables) all of the "indent", "space_before" and
@@ -246,7 +314,7 @@ OBJECT-ORIENTED INTERFACE
 
         Example, pretty-print some simple structure:
 
-           my $json = JSON::XS->new->pretty(1)->encode ({a => [1,2]})
+           my $json = JSON::SIMD->new->pretty(1)->encode ({a => [1,2]})
            =>
            {
               "a" : [
@@ -311,6 +379,9 @@ OBJECT-ORIENTED INTERFACE
         If $enable is false (the default), then "decode" will only accept
         valid JSON texts.
 
+        This option is not compatible with "use_simdjson", and using this
+        option will silently disable simdjson mode.
+
         Currently accepted extensions are:
 
         *   list items can have an end-comma
@@ -374,7 +445,7 @@ OBJECT-ORIENTED INTERFACE
 
     $json = $json->allow_nonref ([$enable])
     $enabled = $json->get_allow_nonref
-        Unlike other boolean options, this opotion is enabled by default
+        Unlike other boolean options, this option is enabled by default
         beginning with version 4.0. See "SECURITY CONSIDERATIONS" for the
         gory details.
 
@@ -391,7 +462,7 @@ OBJECT-ORIENTED INTERFACE
         Example, encode a Perl scalar as JSON value without enabled
         "allow_nonref", resulting in an error:
 
-           JSON::XS->new->allow_nonref (0)->encode ("Hello, World!")
+           JSON::SIMD->new->allow_nonref (0)->encode ("Hello, World!")
            => hash- or arrayref expected...
 
     $json = $json->allow_unknown ([$enable])
@@ -464,6 +535,9 @@ OBJECT-ORIENTED INTERFACE
         this type of conversion, and tagged JSON values will cause a parse
         error in "decode", as if tags were not part of the grammar.
 
+        This option is not compatible with "use_simdjson", and using this
+        option will silently disable simdjson mode.
+
     $json->boolean_values ([$false, $true])
     ($false, $true) = $json->get_boolean_values
         By default, JSON booleans will be decoded as overloaded
@@ -497,7 +571,7 @@ OBJECT-ORIENTED INTERFACE
 
         Example, convert all JSON objects into the integer 5:
 
-           my $js = JSON::XS->new->filter_json_object (sub { 5 });
+           my $js = JSON::SIMD->new->filter_json_object (sub { 5 });
            # returns [5]
            $js->decode ('[{}]')
            # throw an exception because allow_nonref is not enabled
@@ -537,7 +611,7 @@ OBJECT-ORIENTED INTERFACE
         into the corresponding $WIDGET{<id>} object:
 
            # return whatever is in $WIDGET{5}:
-           JSON::XS
+           JSON::SIMD
               ->new
               ->filter_json_single_key_object (__widget__ => sub {
                     $WIDGET{ $_[0] }
@@ -641,8 +715,53 @@ OBJECT-ORIENTED INTERFACE
         This is useful if your JSON texts are not delimited by an outer
         protocol and you need to know where the JSON text ends.
 
-           JSON::XS->new->decode_prefix ("[1] the tail")
-           => ([1], 3)
+           JSON::SIMD->new->decode_prefix ("[1] the tail")
+           => ([1], 4)
+
+    $perl_scalar = $json->decode_at_pointer ($json_text, $path)
+        This works like the "decode" method, with the difference that it
+        expects a second path argument that specifies a part of the JSON
+        document. The decoder quickly locates the specified fragment of the
+        document, then decodes and returns just that part as a Perl data
+        structure or scalar, without fully parsing or allocating for the
+        rest. This is especially useful if the document is large, has a
+        known structure, but only a small part of it is actually required
+        for further processing. In these cases this method may be order of
+        magnitudes faster and may use less memory than decoding the entire
+        document. Example:
+
+           my $large_json = '{
+              "ignore": "this",
+              "don't need": ["these", "either"],
+              "foo": ["bar", {"baz": "quux"}]
+           }';
+           JSON::SIMD->new->use_simdjson->decode_at_pointer($large_json, '/foo/1');
+           => {bar => 'quux'}
+
+        The path argument is expected to be a JSON Pointer as described by
+        RFC 6901 <https://www.rfc-editor.org/rfc/rfc6901>. That is, it must
+        consist of a series object keys or array indices, separated by
+        slashes. The root path (that selects the entire document) is the
+        empty string, not a lone slash. For a complete description of the
+        syntax, including escaping with keys that contain slashes, refer to
+        the RFC text.
+
+        One limitation of this method is that the path argument expects
+        *unescaped* object keys. E.g. for the JSON document
+
+           {"k\u0065y":"value"}
+
+        you would have to specify the path exactly as it appears in the
+        document, as "k\u0065y", not as "key", as it would appear in the
+        decoded Perl hash. (However, this is not true in legacy mode, which
+        expects the escaped key. This is an unfortunate incompatibility.)
+
+        This method croaks if the path is malformed, or it refers to a
+        nonexistent part of the document.
+
+        This method works in both simdjson mode and with the legacy decoder,
+        however, for the latter it doesn't provide any speed or memory
+        advantages.
 
 INCREMENTAL PARSING
     In some cases, there is the need for incremental parsing of JSON texts.
@@ -654,8 +773,8 @@ INCREMENTAL PARSING
     much more efficient (and can be implemented with a minimum of method
     calls).
 
-    JSON::XS will only attempt to parse the JSON text once it is sure it has
-    enough text to get a decisive result, using a very simple but truly
+    JSON::SIMD will only attempt to parse the JSON text once it is sure it
+    has enough text to get a decisive result, using a very simple but truly
     incremental parser. This means that it sometimes won't stop as early as
     the full parser, for example, it doesn't detect mismatched parentheses.
     The only thing it guarantees is that it starts decoding as soon as a
@@ -695,7 +814,7 @@ INCREMENTAL PARSING
         Example: Parse some JSON arrays/objects in a given string and return
         them.
 
-           my @objs = JSON::XS->new->incr_parse ("[5][7][1,2]");
+           my @objs = JSON::SIMD->new->incr_parse ("[5][7][1,2]");
 
     $lvalue_string = $json->incr_text
         This method returns the currently stored JSON fragment as an lvalue,
@@ -755,7 +874,7 @@ INCREMENTAL PARSING
 
        my $text = "[1,2,3] hello";
 
-       my $json = new JSON::XS;
+       my $json = new JSON::SIMD;
 
        my $obj = $json->incr_parse ($text)
           or die "expected JSON object or array at beginning of string";
@@ -775,7 +894,7 @@ INCREMENTAL PARSING
     Here is how you'd do it (it is trivial to write this in an event-based
     manner):
 
-       my $json = new JSON::XS;
+       my $json = new JSON::SIMD;
 
        # read some data from the socket
        while (sysread $socket, my $buf, 4096) {
@@ -792,7 +911,7 @@ INCREMENTAL PARSING
     and here is where the lvalue-ness of "incr_text" comes in useful:
 
        my $text = "[1],[2], [3]";
-       my $json = new JSON::XS;
+       my $json = new JSON::SIMD;
 
        # void context, so no parsing done
        $json->incr_parse ($text);
@@ -811,13 +930,13 @@ INCREMENTAL PARSING
     but you cannot load it into memory fully (this has actually happened in
     the real world :).
 
-    Well, you lost, you have to implement your own JSON parser. But JSON::XS
-    can still help you: You implement a (very simple) array parser and let
-    JSON decode the array elements, which are all full JSON objects on their
-    own (this wouldn't work if the array elements could be JSON numbers, for
-    example):
+    Well, you lost, you have to implement your own JSON parser. But
+    JSON::SIMD can still help you: You implement a (very simple) array
+    parser and let JSON decode the array elements, which are all full JSON
+    objects on their own (this wouldn't work if the array elements could be
+    JSON numbers, for example):
 
-       my $json = new JSON::XS;
+       my $json = new JSON::SIMD;
 
        # open the monster
        open my $fh, "<bigfile.json"
@@ -884,10 +1003,10 @@ INCREMENTAL PARSING
     never ran the above example :).
 
 MAPPING
-    This section describes how JSON::XS maps Perl values to JSON values and
-    vice versa. These mappings are designed to "do the right thing" in most
-    circumstances automatically, preserving round-tripping characteristics
-    (what you put in comes out as something equivalent).
+    This section describes how JSON::SIMD maps Perl values to JSON values
+    and vice versa. These mappings are designed to "do the right thing" in
+    most circumstances automatically, preserving round-tripping
+    characteristics (what you put in comes out as something equivalent).
 
     For the more enlightened: note that in the following descriptions,
     lowercase *perl* refers to the Perl interpreter, while uppercase *Perl*
@@ -915,7 +1034,7 @@ MAPPING
         slightly less memory and might represent more values exactly than
         floating point numbers.
 
-        If the number consists of digits only, JSON::XS will try to
+        If the number consists of digits only, JSON::SIMD will try to
         represent it as an integer value. If that fails, it will try to
         represent it as a numeric (floating point) value if that is possible
         without loss of precision. Otherwise it will preserve the number as
@@ -930,8 +1049,8 @@ MAPPING
 
         Note that precision is not accuracy - binary floating point values
         cannot represent most decimal fractions exactly, and when converting
-        from and to floating point, JSON::XS only guarantees precision up to
-        but not including the least significant bit.
+        from and to floating point, JSON::SIMD only guarantees precision up
+        to but not including the least significant bit.
 
     true, false
         These JSON atoms become "Types::Serialiser::true" and
@@ -965,10 +1084,10 @@ MAPPING
     hash references
         Perl hash references become JSON objects. As there is no inherent
         ordering in hash keys (or JSON objects), they will usually be
-        encoded in a pseudo-random order. JSON::XS can optionally sort the
+        encoded in a pseudo-random order. JSON::SIMD can optionally sort the
         hash keys (determined by the *canonical* flag), so the same
         datastructure will serialise to the same JSON text (given same
-        settings and version of JSON::XS), but this incurs a runtime
+        settings and version of JSON::SIMD), but this incurs a runtime
         overhead and is only rarely useful, e.g. when you want to compare
         some JSON text against another for equality.
 
@@ -980,8 +1099,8 @@ MAPPING
         an exception to be thrown, except for references to the integers 0
         and 1, which get turned into "false" and "true" atoms in JSON.
 
-        Since "JSON::XS" uses the boolean model from Types::Serialiser, you
-        can also "use Types::Serialiser" and then use
+        Since "JSON::SIMD" uses the boolean model from Types::Serialiser,
+        you can also "use Types::Serialiser" and then use
         "Types::Serialiser::false" and "Types::Serialiser::true" to improve
         readability.
 
@@ -995,12 +1114,12 @@ MAPPING
 
     blessed objects
         Blessed objects are not directly representable in JSON, but
-        "JSON::XS" allows various ways of handling objects. See "OBJECT
+        "JSON::SIMD" allows various ways of handling objects. See "OBJECT
         SERIALISATION", below, for details.
 
     simple scalars
         Simple Perl scalars (any scalar that is not a reference) are the
-        most difficult objects to encode: JSON::XS will encode undefined
+        most difficult objects to encode: JSON::SIMD will encode undefined
         scalars as JSON "null" values, scalars that have last been used in a
         string context before encoding as JSON strings, and anything else as
         number value:
@@ -1048,12 +1167,12 @@ MAPPING
     syntax, tagged values.
 
    SERIALISATION
-    What happens when "JSON::XS" encounters a Perl object depends on the
+    What happens when "JSON::SIMD" encounters a Perl object depends on the
     "allow_blessed", "convert_blessed" and "allow_tags" settings, which are
     used in this order:
 
     1. "allow_tags" is enabled and the object has a "FREEZE" method.
-        In this case, "JSON::XS" uses the Types::Serialiser object
+        In this case, "JSON::SIMD" uses the Types::Serialiser object
         serialisation protocol to create a tagged JSON value, using a
         nonstandard extension to the JSON syntax.
 
@@ -1102,7 +1221,7 @@ MAPPING
 
     4. none of the above
         If none of the settings are enabled or the respective methods are
-        missing, "JSON::XS" throws an exception.
+        missing, "JSON::SIMD" throws an exception.
 
    DESERIALISATION
     For deserialisation there are only two cases to consider: either
@@ -1117,9 +1236,9 @@ MAPPING
     parse error will result (as if tagged values were not part of the
     grammar).
 
-    If "allow_tags" is enabled, "JSON::XS" will look up the "THAW" method of
-    the package/classname used during serialisation (it will not attempt to
-    load the package as a Perl module). If there is no such method, the
+    If "allow_tags" is enabled, "JSON::SIMD" will look up the "THAW" method
+    of the package/classname used during serialisation (it will not attempt
+    to load the package as a Perl module). If there is no such method, the
     decoding will fail with an error.
 
     Otherwise, the "THAW" method is invoked with the classname as first
@@ -1254,7 +1373,7 @@ ENCODING/CODESET FLAG NOTES
     so the following Perl fragment will not output something that can be
     guaranteed to be parsable by javascript's "eval":
 
-       use JSON::XS;
+       use JSON::SIMD;
 
        print encode_json [chr 0x2028];
 
@@ -1265,16 +1384,16 @@ ENCODING/CODESET FLAG NOTES
     If this is not an option, you can, as a stop-gap measure, simply encode
     to ASCII-only JSON:
 
-       use JSON::XS;
+       use JSON::SIMD;
 
-       print JSON::XS->new->ascii->encode ([chr 0x2028]);
+       print JSON::SIMD->new->ascii->encode ([chr 0x2028]);
 
     Note that this will enlarge the resulting JSON text quite a bit if you
     have many non-ASCII characters. You might be tempted to run some regexes
     to only escape U+2028 and U+2029, e.g.:
 
        # DO NOT USE THIS!
-       my $json = JSON::XS->new->utf8->encode ([chr 0x2028]);
+       my $json = JSON::SIMD->new->utf8->encode ([chr 0x2028]);
        $json =~ s/\xe2\x80\xa8/\\u2028/g; # escape U+2028
        $json =~ s/\xe2\x80\xa9/\\u2029/g; # escape U+2029
        print $json;
@@ -1300,16 +1419,15 @@ ENCODING/CODESET FLAG NOTES
     If you know of other incompatibilities, please let me know.
 
   JSON and YAML
-    You often hear that JSON is a subset of YAML. This is, however, a mass
-    hysteria(*) and very far from the truth (as of the time of this
-    writing), so let me state it clearly: *in general, there is no way to
-    configure JSON::XS to output a data structure as valid YAML* that works
-    in all cases.
+    You often hear that JSON is a subset of YAML. This is, however, very far
+    from the truth (as of the time of this writing), so let me state it
+    clearly: *in general, there is no way to configure JSON::SIMD to output
+    a data structure as valid YAML* that works in all cases.
 
-    If you really must use JSON::XS to generate YAML, you should use this
+    If you really must use JSON::SIMD to generate YAML, you should use this
     algorithm (subject to change in future versions):
 
-       my $to_yaml = JSON::XS->new->utf8->space_after (1);
+       my $to_yaml = JSON::SIMD->new->utf8->space_after (1);
        my $yaml = $to_yaml->encode ($ref) . "\n";
 
     This will *usually* generate JSON texts that also parse as valid YAML.
@@ -1319,40 +1437,25 @@ ENCODING/CODESET FLAG NOTES
     keys are noticeably shorter than the 1024 "stream characters" YAML
     allows and that you do not have characters with codepoint values outside
     the Unicode BMP (basic multilingual page). YAML also does not allow "\/"
-    sequences in strings (which JSON::XS does not *currently* generate, but
-    other JSON generators might).
+    sequences in strings (which JSON::SIMD does not *currently* generate,
+    but other JSON generators might).
 
-    There might be other incompatibilities that I am not aware of (or the
-    YAML specification has been changed yet again - it does so quite often).
-    In general you should not try to generate YAML with a JSON generator or
+    The YAML 1.1 specification is stricter about the syntax of numbers than
+    JSON: 1e2 is a valid JSON number, but YAML 1.1 requires it to be written
+    as 1.0e+2. Being an invalid number, the YAML parser will treat it as a
+    string. See <https://john-millikin.com/json-is-not-a-yaml-subset> for
+    more information, escpecially the section about YAML 1.2.
+
+    There might be other incompatibilities that I am not aware of. In
+    general you should not try to generate YAML with a JSON generator or
     vice versa, or try to parse JSON with a YAML parser or vice versa:
     chances are high that you will run into severe interoperability problems
     when you least expect it.
 
-    (*) I have been pressured multiple times by Brian Ingerson (one of the
-        authors of the YAML specification) to remove this paragraph, despite
-        him acknowledging that the actual incompatibilities exist. As I was
-        personally bitten by this "JSON is YAML" lie, I refused and said I
-        will continue to educate people about these issues, so others do not
-        run into the same problem again and again. After this, Brian called
-        me a (quote)*complete and worthless idiot*(unquote).
-
-        In my opinion, instead of pressuring and insulting people who
-        actually clarify issues with YAML and the wrong statements of some
-        of its proponents, I would kindly suggest reading the JSON spec
-        (which is not that difficult or long) and finally make YAML
-        compatible to it, and educating users about the changes, instead of
-        spreading lies about the real compatibility for many *years* and
-        trying to silence people who point out that it isn't true.
-
-        Addendum/2009: the YAML 1.2 spec is still incompatible with JSON,
-        even though the incompatibilities have been documented (and are
-        known to Brian) for many years and the spec makes explicit claims
-        that YAML is a superset of JSON. It would be so easy to fix, but
-        apparently, bullying people and corrupting userdata is so much
-        easier.
-
   SPEED
+    These are the original benchmarks from JSON::XS, so they should be
+    relevant for JSON::SIMD too, with its legacy decoder.
+
     It seems that JSON::XS is surprisingly fast, as shown in the following
     tables. They have been generated with the help of the "eg/bench" program
     in the JSON::XS distribution, to make it easy to compare on your own
@@ -1413,6 +1516,29 @@ ENCODING/CODESET FLAG NOTES
     refuse to decode or encode properly, so it was impossible to prepare a
     fair comparison table for that case.
 
+   COMPARISON OF THE SIMDJSON AND LEGACY DECODERS
+          test_case     length   original   simdjson  diff%
+      -----------------------------------------------------
+          long.json      18446   11158.33   13320.00  19.37
+      longkeys.json   10000302      54.99     134.37 144.35
+         short.json        130  510595.83  515252.03   0.91
+       twitter.json     631515     258.99     363.98  40.54
+
+    Here the numbers in the "original" and "simdjson" columns are the number
+    of decodes performed per second, with the legacy mode and "use_simdjson"
+    respectively, more is better. The last column is just the difference in
+    percents. "long.json" and "short.json" are test documents described
+    above, "twitter.json" comes from the simdjson test suite, and
+    "longkeys.json" was generated by the following script:
+
+       perl -MJSON::SIMD -le '\
+       my $k = "a" x 1e5; my $x={}; \
+       for (1..50) {$x->{$k} = $k; $k++;} \
+       print encode_json($x)' > longkeys.json
+
+    Note that these numbers are not comparable with the ones in the above
+    section (as they were ran on different computers).
+
 SECURITY CONSIDERATIONS
     When you are using JSON in a protocol, talking to untrusted potentially
     hostile creatures requires relatively few measures.
@@ -1426,12 +1552,12 @@ SECURITY CONSIDERATIONS
     your resources run out, that's just fine (e.g. by using a separate
     process that can crash safely). The size of a JSON text in octets or
     characters is usually a good indication of the size of the resources
-    required to decode it into a Perl structure. While JSON::XS can check
+    required to decode it into a Perl structure. While JSON::SIMD can check
     the size of the JSON text, it might be too late when you already have it
     in memory, so you might want to check the size before you accept the
     string.
 
-    Third, JSON::XS recurses using the C stack when decoding objects and
+    Third, JSON::SIMD recurses using the C stack when decoding objects and
     arrays. The C stack is a limited resource: for instance, on my amd64
     machine with 8MB of stack size I can decode around 180k nested arrays
     but only 14k nested JSON objects (due to perl itself recursing deeply on
@@ -1443,13 +1569,13 @@ SECURITY CONSIDERATIONS
     Something else could bomb you, too, that I forgot to think of. In that
     case, you get to keep the pieces. I am always open for hints, though...
 
-    Also keep in mind that JSON::XS might leak contents of your Perl data
+    Also keep in mind that JSON::SIMD might leak contents of your Perl data
     structures in its error messages, so when you serialise sensitive
     information you might want to make sure that exceptions thrown by
-    JSON::XS will not end up in front of untrusted eyes.
+    JSON::SIMD will not end up in front of untrusted eyes.
 
-    If you are using JSON::XS to return packets to consumption by JavaScript
-    scripts in a browser you should have a look at
+    If you are using JSON::SIMD to return packets to consumption by
+    JavaScript scripts in a browser you should have a look at
     <http://blog.archive.jpsykes.com/47/practical-csrf-and-json-security/>
     to see whether you are vulnerable to some common attack vectors (which
     really are browser design bugs, but it is still you who will have to
@@ -1489,7 +1615,7 @@ SECURITY CONSIDERATIONS
     easiest way to avoid problems with the "new" JSON definition is to
     explicitly disallow scalar values in your encoder and decoder:
 
-       $json_coder = JSON::XS->new->allow_nonref (0)
+       $json_coder = JSON::SIMD->new->allow_nonref (0)
 
     This is a somewhat unhappy situation, and the blame can fully be put on
     JSON's inmventor, Douglas Crockford, who unilaterally changed the format
@@ -1502,10 +1628,10 @@ RELATIONSHIP WITH I-JSON
     because Javascript only has one type of numbers: IEEE 64 bit floats
     ("binary64").
 
-    For this reaosn, RFC7493 defines "Internet JSON", which is a restricted
+    For this reason, RFC7493 defines "Internet JSON", which is a restricted
     subset of JSON that is supposedly more interoperable on the internet.
 
-    While "JSON::XS" does not offer specific support for I-JSON, it of
+    While "JSON::SIMD" does not offer specific support for I-JSON, it of
     course accepts valid I-JSON and by default implements some of the
     limitations of I-JSON, such as parsing numbers as perl numbers, which
     are usually a superset of binary64 numbers.
@@ -1539,17 +1665,17 @@ RELATIONSHIP WITH I-JSON
     *   encode binary data as base64
 
         While it's tempting to just dump binary data as a string (and let
-        "JSON::XS" do the escaping), for I-JSON, it's *recommended* to
+        "JSON::SIMD" do the escaping), for I-JSON, it's *recommended* to
         encode binary data as base64.
 
     There are some other considerations - read RFC7493 for the details if
     interested.
 
 INTEROPERABILITY WITH OTHER MODULES
-    "JSON::XS" uses the Types::Serialiser module to provide boolean
+    "JSON::SIMD" uses the Types::Serialiser module to provide boolean
     constants. That means that the JSON true and false values will be
     comaptible to true and false values of other modules that do the same,
-    such as JSON::PP and CBOR::XS.
+    such as JSON::XS, JSON::PP and CBOR::XS.
 
 INTEROPERABILITY WITH OTHER JSON DECODERS
     As long as you only serialise data that can be directly expressed in
@@ -1561,11 +1687,12 @@ INTEROPERABILITY WITH OTHER JSON DECODERS
     decoders, then it is very likely that you have an encoding mismatch or
     the other decoder is broken.
 
-    When decoding, "JSON::XS" is strict by default and will likely catch all
-    errors. There are currently two settings that change this: "relaxed"
-    makes "JSON::XS" accept (but not generate) some non-standard extensions,
-    and "allow_tags" will allow you to encode and decode Perl objects, at
-    the cost of not outputting valid JSON anymore.
+    When decoding, "JSON::SIMD" is strict by default and will likely catch
+    all errors. There are currently two settings that change this, and these
+    are only relevant to the legacy decoder: "relaxed" makes "JSON::SIMD"
+    accept (but not generate) some non-standard extensions, and "allow_tags"
+    will allow you to encode and decode Perl objects, at the cost of not
+    outputting valid JSON anymore.
 
   TAGGED VALUE SYNTAX AND STANDARD JSON EN/DECODERS
     When you use "allow_tags" to use the extended (and also nonstandard and
@@ -1613,17 +1740,23 @@ INTEROPERABILITY WITH OTHER JSON DECODERS
 (I-)THREADS
     This module is *not* guaranteed to be ithread (or MULTIPLICITY-) safe
     and there are no plans to change this. Note that perl's builtin
-    so-called threads/ithreads are officially deprecated and should not be
+    so-called threads/ithreads are officially discouraged and should not be
     used.
+
+    The simdjson decoder, in itself, is thread-safe, however, it is limited
+    to single-thread use in practice, because it uses a mutex to protect
+    against concurrent usage. This design, while probably controversial, was
+    chosen to avoid the cost of using thread-local storage and optimize for
+    the more common case of single-thread usage instead.
 
 THE PERILS OF SETLOCALE
     Sometimes people avoid the Perl locale support and directly call the
     system's setlocale function with "LC_ALL".
 
-    This breaks both perl and modules such as JSON::XS, as stringification
+    This breaks both perl and modules such as JSON::SIMD, as stringification
     of numbers no longer works correctly (e.g. "$x = 0.1; print "$x"+1"
-    might print 1, and JSON::XS might output illegal JSON as JSON::XS relies
-    on perl to stringify numbers).
+    might print 1, and JSON::SIMD might output illegal JSON as JSON::SIMD
+    relies on perl to stringify numbers).
 
     The solution is simple: don't call "setlocale", or use it for only those
     categories you need, such as "LC_MESSAGES" or "LC_CTYPE".
@@ -1633,12 +1766,32 @@ THE PERILS OF SETLOCALE
     afterwards.
 
 SOME HISTORY
-    At the time this module was created there already were a number of JSON
-    modules available on CPAN, so what was the reason to write yet another
-    JSON module? While it seems there are many JSON modules, none of them
-    correctly handled all corner cases, and in most cases their maintainers
-    are unresponsive, gone missing, or not listening to bug reports for
-    other reasons.
+    The idea for this module came in 2023 when I learned about simdjson, and
+    found that one particular language is conspicuously missing from the
+    list of bindings and ports. The impulse to remedy that situation and
+    produce a working Perl binding, bringing the latest and greatest
+    advances in JSON parsing to Perl users, resulted in this module.
+
+    JSON::XS was chosen as the basis for the fork because I has been using
+    that module at $work and elsewhere without problems, so preserving
+    compatibility with it was seen as an important goal.
+
+    I had misgivings about publishing a fork, because, frankly, the world
+    does not need yet another JSON parsing Perl module at this time. Yet,
+    the potential speed gains, especially the ability to decode just a part
+    of a document, offset the problems associated with a fork, possibly
+    making it worthwhile.
+
+    (The remaining paragraphs are from JSON::XS's manual, preserved here for
+    historical authenticity. The opinions expressed below are Marc
+    Lehmann's.)
+
+    At the time this module (the original JSON::XS, that is) was created
+    there already were a number of JSON modules available on CPAN, so what
+    was the reason to write yet another JSON module? While it seems there
+    are many JSON modules, none of them correctly handled all corner cases,
+    and in most cases their maintainers are unresponsive, gone missing, or
+    not listening to bug reports for other reasons.
 
     Beginning with version 2.0 of the JSON module, when both JSON and
     JSON::XS are installed, then JSON will fall back on JSON::XS (this can
@@ -1661,13 +1814,20 @@ BUGS
     not mean it's bug-free, only that I think its design is bug-free. If you
     keep reporting bugs they will be fixed swiftly, though.
 
-    Please refrain from using rt.cpan.org or any other bug reporting
-    service. I put the contact address into my modules for a reason.
-
 SEE ALSO
-    The json_xs command line utility for quick experiments.
+    The json_simd command line utility for quick experiments.
 
-AUTHOR
+AUTHORS
+     JSON::XS original author:
      Marc Lehmann <schmorp@schmorp.de>
      http://home.schmorp.de/
+
+     Simdjson authors:
+     Daniel Lemire
+     Geoff Langdale
+     John Keiser
+     https://simdjson.org/
+
+     JSON::SIMD
+     Pe'ter Juha'sz <peter.juhasz83@gmail.com>
 
