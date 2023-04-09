@@ -477,15 +477,6 @@ SV * simdjson_decode(dec_t *dec) {
           problem_retry = true;
         } else {
           location = get_location(doc);
-          if (simdjson_unlikely(SvCUR(dec->input) == 6)) {
-            // simdjson has a blind spot where it comes to the very specific document "false." where the . may be any non-structural char.
-            // FIXME remove this if block when upstream fixes it
-            char *p = SvPVX(dec->input);
-            if (p[0] == 'f' && p[1] == 'a' && p[2] == 'l' && p[3] == 's' && p[4] == 'e' &&
-              p[5] != 0x20 && p[5] != 0x0d && p[5] != 0x0a && p[5] != 0x09) {
-              location = p+5;
-            }
-          }
         }
       }
     } else {

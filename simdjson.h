@@ -1,4 +1,4 @@
-/* auto-generated on 2023-03-30 12:35:38 -0400. Do not edit! */
+/* auto-generated on 2023-04-08 16:11:40 -0400. Do not edit! */
 /* begin file include/simdjson.h */
 #ifndef SIMDJSON_H
 #define SIMDJSON_H
@@ -43,7 +43,7 @@
 #define SIMDJSON_SIMDJSON_VERSION_H
 
 /** The version of simdjson being used (major.minor.revision) */
-#define SIMDJSON_VERSION "3.1.6"
+#define SIMDJSON_VERSION "3.1.7"
 
 namespace simdjson {
 enum {
@@ -58,7 +58,7 @@ enum {
   /**
    * The revision (major.minor.REVISION) of simdjson being used.
    */
-  SIMDJSON_VERSION_REVISION = 6
+  SIMDJSON_VERSION_REVISION = 7
 };
 } // namespace simdjson
 
@@ -23563,7 +23563,12 @@ public:
    */
   simdjson_inline error_code optional_error(error_code error, const char *message) noexcept;
 
-  template<int N> simdjson_warn_unused simdjson_inline bool copy_to_buffer(const uint8_t *json, uint32_t max_len, uint8_t (&tmpbuf)[N]) noexcept;
+  /**
+   * Take an input in json containing max_len characters and attempt to copy it over to tmpbuf, a buffer with
+   * N bytes of capacity. It will return false if N is too small (smaller than max_len) of if it is zero.
+   * The buffer (tmpbuf) is padded with space characters.
+   */
+  simdjson_warn_unused simdjson_inline bool copy_to_buffer(const uint8_t *json, uint32_t max_len, uint8_t *tmpbuf, size_t N) noexcept;
 
   simdjson_inline token_position position() const noexcept;
   /**
@@ -28082,19 +28087,16 @@ simdjson_inline error_code json_iterator::optional_error(error_code _error, cons
   return _error;
 }
 
-template<int N>
-simdjson_warn_unused simdjson_inline bool json_iterator::copy_to_buffer(const uint8_t *json, uint32_t max_len, uint8_t (&tmpbuf)[N]) noexcept {
+
+simdjson_warn_unused simdjson_inline bool json_iterator::copy_to_buffer(const uint8_t *json, uint32_t max_len, uint8_t *tmpbuf, size_t N) noexcept {
+  // This function is not expected to be called in performance-sensitive settings.
   // Let us guard against silly cases:
   if((N < max_len) || (N == 0)) { return false; }
-  // Truncate whitespace to fit the buffer.
-  if (max_len > N-1) {
-    // if (jsoncharutils::is_not_structural_or_whitespace(json[N-1])) { return false; }
-    max_len = N-1;
-  }
-
   // Copy to the buffer.
   std::memcpy(tmpbuf, json, max_len);
-  tmpbuf[max_len] = ' ';
+  if(N > max_len) { // We pad whatever remains with ' '.
+    std::memset(tmpbuf + max_len, ' ', N - max_len);
+  }
   return true;
 }
 
@@ -28687,7 +28689,7 @@ simdjson_inline simdjson_result<bool> value_iterator::is_root_integer(bool check
   auto max_len = peek_start_length();
   auto json = peek_root_scalar("is_root_integer");
   uint8_t tmpbuf[20+1]; // <20 digits> is the longest possible unsigned integer
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 20+1)) {
     return false; // if there are more than 20 characters, it cannot be represented as an integer.
   }
   auto answer = numberparsing::is_integer(tmpbuf);
@@ -28705,7 +28707,7 @@ simdjson_inline simdjson_result<SIMDJSON_BUILTIN_IMPLEMENTATION::ondemand::numbe
   // 1074 is the maximum number of significant fractional digits. Add 8 more digits for the biggest
   // number: -0.<fraction>e-308.
   uint8_t tmpbuf[1074+8+1];
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 1074+8+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 1082 characters");
     return NUMBER_ERROR;
   }
@@ -28720,7 +28722,7 @@ simdjson_inline simdjson_result<number> value_iterator::get_root_number(bool che
   // 1074 is the maximum number of significant fractional digits. Add 8 more digits for the biggest
   // number: -0.<fraction>e-308.
   uint8_t tmpbuf[1074+8+1];
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 1074+8+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 1082 characters");
     return NUMBER_ERROR;
   }
@@ -28748,7 +28750,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<uint64_t> value_iterator::g
   auto max_len = peek_start_length();
   auto json = peek_root_scalar("uint64");
   uint8_t tmpbuf[20+1]; // <20 digits> is the longest possible unsigned integer
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 20+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 20 characters");
     return NUMBER_ERROR;
   }
@@ -28763,7 +28765,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<uint64_t> value_iterator::g
   auto max_len = peek_start_length();
   auto json = peek_root_scalar("uint64");
   uint8_t tmpbuf[20+1]; // <20 digits> is the longest possible unsigned integer
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 20+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 20 characters");
     return NUMBER_ERROR;
   }
@@ -28778,7 +28780,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<int64_t> value_iterator::ge
   auto max_len = peek_start_length();
   auto json = peek_root_scalar("int64");
   uint8_t tmpbuf[20+1]; // -<19 digits> is the longest possible integer
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 20+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 20 characters");
     return NUMBER_ERROR;
   }
@@ -28794,7 +28796,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<int64_t> value_iterator::ge
   auto max_len = peek_start_length();
   auto json = peek_root_scalar("int64");
   uint8_t tmpbuf[20+1]; // -<19 digits> is the longest possible integer
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 20+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 20 characters");
     return NUMBER_ERROR;
   }
@@ -28813,7 +28815,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<double> value_iterator::get
   // 1074 is the maximum number of significant fractional digits. Add 8 more digits for the biggest
   // number: -0.<fraction>e-308.
   uint8_t tmpbuf[1074+8+1];
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 1074+8+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 1082 characters");
     return NUMBER_ERROR;
   }
@@ -28832,7 +28834,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<double> value_iterator::get
   // 1074 is the maximum number of significant fractional digits. Add 8 more digits for the biggest
   // number: -0.<fraction>e-308.
   uint8_t tmpbuf[1074+8+1];
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) {
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 1074+8+1)) {
     logger::log_error(*_json_iter, start_position(), depth(), "Root number more than 1082 characters");
     return NUMBER_ERROR;
   }
@@ -28847,7 +28849,7 @@ simdjson_warn_unused simdjson_inline simdjson_result<bool> value_iterator::get_r
   auto max_len = peek_start_length();
   auto json = peek_root_scalar("bool");
   uint8_t tmpbuf[5+1];
-  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf)) { return incorrect_type_error("Not a boolean"); }
+  if (!_json_iter->copy_to_buffer(json, max_len, tmpbuf, 5+1)) { return incorrect_type_error("Not a boolean"); }
   auto result = parse_bool(tmpbuf);
   if(result.error() == SUCCESS) {
     if (check_trailing && !_json_iter->is_single_token()) { return TRAILING_CONTENT; }
