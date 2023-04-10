@@ -95,27 +95,6 @@ jobs:
       - run: perl Makefile.PL
       - run: make test
 
-  macOS:
-    needs: [ubuntu]
-    env:
-      PERL_USE_UNSAFE_INC: 0
-      AUTOMATED_TESTING: 1
-      AUTHOR_TESTING: 0
-      RELEASE_TESTING: 0
-
-    runs-on: macOS-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        perl-version: [latest]
-
-    steps:
-      - uses: actions/checkout@v1
-      - run: perl -V
-      - run: perl Makefile.PL
-      - run: make test
-
   windows:
     needs: [ubuntu]
     env:
