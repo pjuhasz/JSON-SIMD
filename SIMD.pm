@@ -1638,10 +1638,11 @@ comparison table for that case.
 
       test_case     length   original   simdjson  diff%
   -----------------------------------------------------
-      long.json      18446   11158.33   13320.00  19.37
-  longkeys.json   10000302      54.99     134.37 144.35
-     short.json        130  510595.83  515252.03   0.91
-   twitter.json     631515     258.99     363.98  40.54
+      long.json      18446   11471.52   15197.25  32.48
+  longkeys.json   10000301      55.44     141.17 154.64
+     short.json        130  533907.86  578805.72   8.41
+   twitter.json     631515     267.69     414.75  54.94
+
 
 Here the numbers in the C<original> and C<simdjson> columns are the
 number of decodes performed per second, with the legacy mode and C<use_simdjson>
