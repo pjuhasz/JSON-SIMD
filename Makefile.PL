@@ -1,6 +1,5 @@
 use 5.008003;
 use ExtUtils::MakeMaker;
-use ExtUtils::CppGuess;
 
 #use Canary::Stability JSON::SIMD => 1, 5.008003;
 
