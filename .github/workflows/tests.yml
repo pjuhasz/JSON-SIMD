@@ -27,10 +27,6 @@ jobs:
           install: |
             Data::Dumper
             Devel::Peek
-#            Mojo::JSON
-#            JSON::XS
-#            JSON
-#            JSON::PP
             Test::LeakTrace
             Test::MemoryGrowth
             Test::MinimumVersion
@@ -94,8 +90,6 @@ jobs:
           sudo: false
           install: |
             Data::Dumper
-#            JSON::XS
-#            JSON
             Test
             Test::More
       - run: perl Makefile.PL
