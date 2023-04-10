@@ -1081,7 +1081,7 @@ emulate_at_pointer (SV *sv, SV *path)
       }
 
       AV *av = (AV*) SvRV(sv);
-      SSize_t last_idx = av_top_index(av);
+      SSize_t last_idx = AvFILL(av);
       if (idx > last_idx) {
         err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
         goto emulate_fail;
