@@ -18,8 +18,14 @@ WriteMakefile(
     },
     CONFIGURE_REQUIRES => { ExtUtils::MakeMaker => 6.52 },
     OBJECT => '$(O_FILES)',
-    LD => 'g++',
+    ($^O eq 'darwin' ?
+       (LD => 'clang++') :
+       (LD => 'g++')
+    ),
     OPTIMIZE => '-O3',
-    CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG",
+    ($^O eq 'darwin' ?
+       (CCFLAGS => "$Config::Config{ccflags} -std=c++11 -stdlib=libc++ -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG") :
+       (CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG")
+    ),
 );
 
