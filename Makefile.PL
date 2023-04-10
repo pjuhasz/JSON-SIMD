@@ -1,5 +1,6 @@
 use 5.008003;
 use ExtUtils::MakeMaker;
+use ExtUtils::CppGuess;
 
 #use Canary::Stability JSON::SIMD => 1, 5.008003;
 
@@ -24,7 +25,7 @@ WriteMakefile(
     ),
     OPTIMIZE => '-O3',
     ($^O eq 'darwin' ?
-       (CCFLAGS => "$Config::Config{ccflags} -std=c++11 -stdlib=libc++ -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG") :
+       (CCFLAGS => "$Config::Config{ccflags} -xc++ -std=c++11 -stdlib=libc++ -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG") :
        (CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG")
     ),
 );
