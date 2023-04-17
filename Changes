@@ -1,10 +1,13 @@
 Revision history for Perl extension JSON::SIMD
 
+1.01 Mon Apr 17 19:32:46 CEST 2023
+	- update repository and issue tracker
+
 1.00 Mon Apr 17 18:49:49 CEST 2023
 	- first version of JSON::SIMD, forked from JSON::XS
 	- add simdjson decoder, make it the default
 	- add decode_at_pointer method
-	- add simdjson_version
+	- add simdjson_version function
 
 (These TODOs and the rest of the changelog are from JSON::XS)
 TODO: maybe detect and croak on more invalid inputs (e.g. +-inf/nan)
