@@ -1,16 +1,18 @@
 Revision history for Perl extension JSON::SIMD
 
-(These are from JSON::XS)
+1.00 Mon Apr 17 18:49:49 CEST 2023
+	- first version of JSON::SIMD, forked from JSON::XS
+	- add simdjson decoder, make it the default
+	- add decode_at_pointer method
+	- add simdjson_version
+
+(These TODOs and the rest of the changelog are from JSON::XS)
 TODO: maybe detect and croak on more invalid inputs (e.g. +-inf/nan)
 TODO: maybe avoid the reblessing and better support readonly objects.
 TODO: how to cope with tagged values and standard json decoders
 TODO: investigate magic (Eric Brine)
 TODO: [PATCH] Types::Serialiser: Inline true(), false() and error() functions
 TODO: replace bool_stash by BOOL_STASH seems to work with mod_perl, make a compile time option?
-
-4.03.1 FIXME
-	- forked from JSON::XS
-	- simdjson decoder added and made default
 
 4.03 Tue Oct 27 19:05:01 CET 2020
 	- when parsing comments in relaxed mode, JSON::XS would detect garbage
