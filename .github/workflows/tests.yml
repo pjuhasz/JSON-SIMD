@@ -119,3 +119,29 @@ jobs:
       - run: make test
         continue-on-error: true
 
+  freebsd:
+    needs: [ubuntu]
+
+    runs-on: macos-12
+    name: actually, FreeBSD
+
+    env:
+      PERL_USE_UNSAFE_INC: 0
+      AUTOMATED_TESTING: 1
+      AUTHOR_TESTING: 0
+      RELEASE_TESTING: 0
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test in FreeBSD
+        id: test
+        uses: vmactions/freebsd-vm@v0
+        with:
+          envs: 'PERL_USE_UNSAFE_INC AUTOMATED_TESTING AUTHOR_TESTING RELEASE_TESTING'
+          usesh: true
+          copyback: false
+          run: |
+            freebsd-version
+            perl -V
+            perl Makefile.PL
+            make test
