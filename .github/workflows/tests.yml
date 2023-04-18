@@ -116,6 +116,15 @@ jobs:
     steps:
       - uses: actions/checkout@master
       - run: perl -V
+      - name: install cpan deps
+        uses: perl-actions/install-with-cpm@v1.3
+        with:
+          sudo: false
+          install: |
+            Data::Dumper
+            Test
+            Test::More
+            ExtUtils::CppGuess
       - run: perl Makefile.PL
       #- run: prove -vb t/*.t
       - run: make test
@@ -142,6 +151,8 @@ jobs:
           envs: 'PERL_USE_UNSAFE_INC AUTOMATED_TESTING AUTHOR_TESTING RELEASE_TESTING'
           usesh: true
           copyback: false
+          prepare: |
+            pkg install -y perl p5-ExtUtils-MakeMaker p5-ExtUtils-CppGuess p5-Test-More
           run: |
             freebsd-version
             perl -V
