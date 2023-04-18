@@ -152,7 +152,7 @@ jobs:
           usesh: true
           copyback: false
           prepare: |
-            pkg install -y perl p5-ExtUtils-MakeMaker p5-ExtUtils-CppGuess p5-Test-More
+            pkg install -y perl5 p5-ExtUtils-MakeMaker p5-ExtUtils-CppGuess
           run: |
             freebsd-version
             perl -V

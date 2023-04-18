@@ -1140,6 +1140,10 @@ represent most decimal fractions exactly, and when converting from and to
 floating point, JSON::SIMD only guarantees precision up to but not including
 the least significant bit.
 
+The simdjson decoder always decodes floating point numbers as IEEE-754 doubles,
+which may lead to a perceived loss of precision if Perl was built to use
+long doubles.
+
 =item true, false
 
 These JSON atoms become C<Types::Serialiser::true> and
