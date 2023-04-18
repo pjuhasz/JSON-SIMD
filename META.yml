@@ -4,8 +4,10 @@ author:
   - unknown
 build_requires:
   ExtUtils::MakeMaker: '0'
+  ExtUtils::CppGuess: "0.15"
 configure_requires:
   ExtUtils::MakeMaker: '6.52'
+  ExtUtils::CppGuess: "0.15"
 dynamic_config: 1
 generated_by: 'ExtUtils::MakeMaker version 7.34, CPAN::Meta::Converter version 2.150001'
 license: unknown
@@ -24,4 +26,4 @@ resources:
   bugtracker: https://github.com/pjuhasz/JSON-SIMD/issues
   license: http://dev.perl.org/licenses/
   repository: https://github.com/pjuhasz/JSON-SIMD
-version: '1.02'
+version: '1.03'

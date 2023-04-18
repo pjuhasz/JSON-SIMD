@@ -42,6 +42,7 @@ jobs:
             Text::CSV_XS
             List::MoreUtils
             Test::Kwalitee
+            ExtUtils::CppGuess
       - run: perl Makefile.PL
       - run: make test
 
