@@ -93,6 +93,7 @@ jobs:
             Data::Dumper
             Test
             Test::More
+            ExtUtils::CppGuess
       - run: perl Makefile.PL
       - run: make test
 
