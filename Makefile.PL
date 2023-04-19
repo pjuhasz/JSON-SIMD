@@ -26,6 +26,7 @@ WriteMakefile(
     OPTIMIZE => '-O3',
     CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG",
     META_MERGE => {
+        'meta-spec' => { version => 2 },
         resources => {
             bugtracker => { web => "https://github.com/pjuhasz/JSON-SIMD/issues" },
             license => [ "http://dev.perl.org/licenses/" ],
