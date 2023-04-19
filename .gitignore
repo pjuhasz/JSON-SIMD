@@ -1,0 +1,11 @@
+JSON-SIMD-*.tar.gz
+MYMETA.*
+META.*
+Makefile
+SIMD.bs
+SIMD.c
+SIMD.o
+blib/
+pm_to_blib
+*.o
+
