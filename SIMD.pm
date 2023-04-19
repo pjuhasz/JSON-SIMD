@@ -86,8 +86,6 @@ stuff). Or you can combine those features in whatever way you like.
 
 package JSON::SIMD;
 
-use common::sense;
-
 our $VERSION = '1.03';
 our $JSON_XS_VERSION = '4.03';
 our @ISA = qw(Exporter);
@@ -2008,7 +2006,7 @@ The F<json_simd> command line utility for quick experiments.
  https://simdjson.org/
 
  JSON::SIMD
- Pe'ter Juha'sz <peter.juhasz83@gmail.com>
+ Pe'ter Juha'sz <pjuhasz@cpan.org>
 
 =cut
 

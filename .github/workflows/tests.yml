@@ -152,7 +152,7 @@ jobs:
           usesh: true
           copyback: false
           prepare: |
-            pkg install -y perl5 p5-ExtUtils-MakeMaker p5-ExtUtils-CppGuess p5-common-sense p5-Types-Serialiser
+            pkg install -y perl5 p5-ExtUtils-MakeMaker p5-ExtUtils-CppGuess p5-Types-Serialiser
           run: |
             freebsd-version
             perl -V
