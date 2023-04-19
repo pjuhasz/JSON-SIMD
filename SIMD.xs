@@ -306,7 +306,8 @@ json_atof_scan1 (const char *s, NV *accum, int *expo, int postdp, int maxdepth)
   *expo += eaccum;
 }
 
-static NV
+// not static because we call it from simdjson too
+NV
 json_atof (const char *s)
 {
   NV accum = 0.;
