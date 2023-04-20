@@ -897,7 +897,11 @@ encode_sv (enc_t *enc, SV *sv)
     {
       // trust that perl will do the right thing w.r.t. JSON syntax.
       need (enc, NV_DIG + 32);
+#ifdef USE_QUADMATH
+      quadmath_snprintf(enc->cur, enc->end - enc->cur, "%.*Qg", (int)NV_DIG, SvNVX(sv));
+#else
       Gconvert (SvNVX (sv), NV_DIG, 0, enc->cur);
+#endif
       enc->cur += strlen (enc->cur);
     }
   else if (SvIOKp (sv))
