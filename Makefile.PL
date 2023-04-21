@@ -21,7 +21,7 @@ WriteMakefile(
     OBJECT => '$(O_FILES)',
     LD => $cxx_options{CC},
     OPTIMIZE => '-O3',
-    CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG -fno-asynchronous-unwind-tables",
+    CCFLAGS => "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG -fno-asynchronous-unwind-tables -fno-exceptions",
     META_MERGE => {
         'meta-spec' => { version => 2 },
         resources => {
