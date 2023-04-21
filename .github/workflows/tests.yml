@@ -81,7 +81,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: shogo82148/actions-setup-perl@main
+      - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: ${{ matrix.perl-version }}
       - run: perl -V
