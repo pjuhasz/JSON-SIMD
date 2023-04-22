@@ -63,8 +63,14 @@ SKIP: {
 	skip "encode_core_bools and builtin::true etc. only works with 5.36+", 8 if $] < 5.036;
 
 	BEGIN {
+		# this section was taken from Cpanel::JSON::XS
 		warnings->unimport('experimental::builtin') if $] >= 5.036;
 		builtin->import (qw/true false is_bool/) if $] >= 5.036;
+		# avoid syntax errors on old perls
+		eval q[
+			   sub true { !0 }
+			   sub false { !1 }
+		] if $] < 5.036;
 	}
 
 	my $expected = '[false,true]';
