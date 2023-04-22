@@ -53,7 +53,8 @@
 #define F_ALLOW_TAGS        0x00004000UL
 #define F_HOOK              0x00008000UL // some hooks exist, so slow-path processing
 #define F_USE_SIMDJSON      0x00010000UL
-#define F_ENCODE_CORE_BOOLS 0x00020000UL
+#define F_CORE_BOOLS        0x00020000UL
+#define F_ENCODE_CORE_BOOLS 0x00040000UL
 
 #define F_PRETTY    F_INDENT | F_SPACE_BEFORE | F_SPACE_AFTER
 
@@ -2264,18 +2265,39 @@ void new (char *klass)
 
 void boolean_values (JSON *self, SV *v_false = 0, SV *v_true = 0)
 	PPCODE:
-	self->v_false = newSVsv (v_false);
-	self->v_true  = newSVsv (v_true);
+        self->flags   &= ~F_CORE_BOOLS;
+        self->v_false = newSVsv (v_false);
+        self->v_true  = newSVsv (v_true);
         XPUSHs (ST (0));
 
 void get_boolean_values (JSON *self)
 	PPCODE:
         if (self->v_false && self->v_true)
-	  {
+          {
             EXTEND (SP, 2);
             PUSHs (self->v_false);
             PUSHs (self->v_true);
           }
+
+void core_bools (JSON *self, int enable = 1)
+	PPCODE:
+        self->flags   |= F_CORE_BOOLS;
+        self->v_false = newSVsv (&PL_sv_no);
+        self->v_true  = newSVsv (&PL_sv_yes);
+        XPUSHs (ST (0));
+
+void get_core_bools (JSON *self)
+	PPCODE:
+{
+        int result = self->flags & F_CORE_BOOLS;
+#if PERL_VERSION_GE(5,36,0)
+        if (self->v_false && self->v_true && SvIsBOOL(self->v_false) && SvIsBOOL(self->v_true))
+          {
+            result = F_CORE_BOOLS;
+          }
+#endif
+        XPUSHs (boolSV (result));
+}
 
 void ascii (JSON *self, int enable = 1)
 	ALIAS:
