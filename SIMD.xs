@@ -1,6 +1,7 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+#include "ppport.h"
 
 #include "simdjson_wrapper.h"
 
@@ -66,15 +67,15 @@
 #define SE } while (0)
 
 #if __GNUC__ >= 3
-# define expect(expr,value)         __builtin_expect ((expr), (value))
+# define my_expect(expr,value)      __builtin_expect ((expr), (value))
 # define INLINE                     static inline
 #else
-# define expect(expr,value)         (expr)
+# define my_expect(expr,value)      (expr)
 # define INLINE                     static
 #endif
 
-#define expect_false(expr) expect ((expr) != 0, 0)
-#define expect_true(expr)  expect ((expr) != 0, 1)
+#define expect_false(expr) my_expect ((expr) != 0, 0)
+#define expect_true(expr)  my_expect ((expr) != 0, 1)
 
 #define IN_RANGE_INC(type,val,beg,end) \
   ((unsigned type)((unsigned type)(val) - (unsigned type)(beg)) \
@@ -790,7 +791,7 @@ encode_rv (enc_t *enc, SV *sv)
           PUSHs (sv_json);
 
           PUTBACK;
-          count = call_sv ((SV *)GvCV (method), G_ARRAY);
+          count = call_sv ((SV *)GvCV (method), G_LIST);
           SPAGAIN;
 
           // catch this surprisingly common error
@@ -1544,7 +1545,7 @@ filter_object (dec_t *dec, SV *sv, HV* hv)
           XPUSHs (HeVAL (he));
           sv_2mortal (sv);
 
-          PUTBACK; count = call_sv (HeVAL (cb), G_ARRAY); SPAGAIN;
+          PUTBACK; count = call_sv (HeVAL (cb), G_LIST); SPAGAIN;
 
           if (count == 1)
             {
@@ -1573,7 +1574,7 @@ filter_object (dec_t *dec, SV *sv, HV* hv)
       PUSHMARK (SP);
       XPUSHs (sv_2mortal (sv));
 
-      PUTBACK; count = call_sv (dec->json.cb_object, G_ARRAY); SPAGAIN;
+      PUTBACK; count = call_sv (dec->json.cb_object, G_LIST); SPAGAIN;
 
       if (count == 1)
         sv = newSVsv (POPs);
@@ -2494,7 +2495,7 @@ void incr_parse (JSON *self, SV *jsonstr = 0)
 
               sv_chop (self->incr_text, SvPVX (self->incr_text) + offset);
             }
-          while (GIMME_V == G_ARRAY);
+          while (GIMME_V == G_LIST);
 }
 
 SV *incr_text (JSON *self)

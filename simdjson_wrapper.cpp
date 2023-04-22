@@ -3,6 +3,7 @@
 #include "simdjson.h"
 #define PERL_NO_GET_CONTEXT
 #include "simdjson_wrapper.h"
+#include "ppport.h"
 
 using namespace simdjson;
 
