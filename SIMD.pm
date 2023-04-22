@@ -86,7 +86,7 @@ stuff). Or you can combine those features in whatever way you like.
 
 package JSON::SIMD;
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 our $JSON_XS_VERSION = '4.03';
 our @ISA = qw(Exporter);
 
@@ -661,7 +661,7 @@ booleans using the boolean_values method.
 
 If C<$enable> is true (or missing), then subsequent C<encode> operations
 will recognize Perl's special boolean values !!0 and !!1 (or C<builtin::false>
-and C<builtin::true) and encode them as JSON C<false> and C<true>, respectively.
+and C<builtin::true>) and encode them as JSON C<false> and C<true>, respectively.
 
 Be warned though, this only works on perl 5.36 or newer. With older perls
 this option does nothing.

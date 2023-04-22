@@ -5,11 +5,6 @@ use ExtUtils::CppGuess;
 my $guess = ExtUtils::CppGuess->new;
 my %cxx_options = $guess->makemaker_options;
 
-# C++11 is a hard requirement for simdjson.
-# However, we let the compiler pick a higher default if it wants to,
-# because it may enable further enhancements in simdjson (e.g. native std::string_view).
-$guess->cpp_standard_flag('C++11');
-
 my $ccflags = "$Config::Config{ccflags} -DSIMDJSON_EXCEPTIONS=0 -DNDEBUG";
 
 # work around compilation issue on windows (invalid register for .seh_savexmm)
