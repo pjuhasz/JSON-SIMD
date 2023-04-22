@@ -640,6 +640,22 @@ to their default values.
 C<get_boolean_values> will return both C<$false> and C<$true> values, or
 the empty list when they are set to the default.
 
+=item $json = $json->encode_core_bools ([$enable])
+
+=item $enabled = $json->get_encode_core_bools
+
+Since Perl 5.36 it is possible to have "stable boolean tracking", that is,
+the special !!0 and !!1 boolean-ish values can retain their boolean-ish
+nature even after assignment into a variable. There are also (experimental)
+C<true> and C<false> aliases available from the C<builtin> module.
+
+If C<$enable> is true (or missing), then subsequent C<encode> operations
+will recognize these special boolean values and encode them as JSON
+C<true> and C<false>, respectively.
+
+Be warned though, this only works in Perl 5.36 or newer. With older Perls
+this option does nothing.
+
 =item $json = $json->filter_json_object ([$coderef->($hashref)])
 
 When C<$coderef> is specified, it will be called from C<decode> each
@@ -1168,11 +1184,14 @@ in order to avoid the loss of precision.
 
 =item true, false
 
-These JSON atoms become C<Types::Serialiser::true> and
+By default, these JSON atoms become C<Types::Serialiser::true> and
 C<Types::Serialiser::false>, respectively. They are overloaded to act
 almost exactly like the numbers C<1> and C<0>. You can check whether
 a scalar is a JSON boolean by using the C<Types::Serialiser::is_bool>
 function (after C<use Types::Serialier>, of course).
+
+You can also use the C<boolean_values> method to supply your own true
+and false values.
 
 =item null
 

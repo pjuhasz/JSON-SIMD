@@ -174,7 +174,7 @@ static inline bool validate_ascii(const char *buf, size_t len) noexcept {
   } while (0)
 
 // XXX keep in sync w XS.xs
-#define F_HOOK           0x00080000UL // some hooks exist, so slow-path processing
+#define F_HOOK           0x00008000UL // some hooks exist, so slow-path processing
 
 // There is some special kind of perversion going on that both C++'s advanced template magic
 // and threaded Perl's THX_ voodoo are present, yet the whole thing still works.

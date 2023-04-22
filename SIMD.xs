@@ -37,22 +37,23 @@
 // three extra for rounding, sign, and end of string
 #define IVUV_MAXCHARS (sizeof (UV) * CHAR_BIT * 28 / 93 + 3)
 
-#define F_ASCII          0x00000001UL
-#define F_LATIN1         0x00000002UL
-#define F_UTF8           0x00000004UL
-#define F_INDENT         0x00000008UL
-#define F_CANONICAL      0x00000010UL
-#define F_SPACE_BEFORE   0x00000020UL
-#define F_SPACE_AFTER    0x00000040UL
-#define F_ALLOW_NONREF   0x00000100UL
-#define F_SHRINK         0x00000200UL
-#define F_ALLOW_BLESSED  0x00000400UL
-#define F_CONV_BLESSED   0x00000800UL
-#define F_RELAXED        0x00001000UL
-#define F_ALLOW_UNKNOWN  0x00002000UL
-#define F_ALLOW_TAGS     0x00004000UL
-#define F_HOOK           0x00080000UL // some hooks exist, so slow-path processing
-#define F_USE_SIMDJSON   0x00100000UL
+#define F_ASCII             0x00000001UL
+#define F_LATIN1            0x00000002UL
+#define F_UTF8              0x00000004UL
+#define F_INDENT            0x00000008UL
+#define F_CANONICAL         0x00000010UL
+#define F_SPACE_BEFORE      0x00000020UL
+#define F_SPACE_AFTER       0x00000040UL
+#define F_ALLOW_NONREF      0x00000100UL
+#define F_SHRINK            0x00000200UL
+#define F_ALLOW_BLESSED     0x00000400UL
+#define F_CONV_BLESSED      0x00000800UL
+#define F_RELAXED           0x00001000UL
+#define F_ALLOW_UNKNOWN     0x00002000UL
+#define F_ALLOW_TAGS        0x00004000UL
+#define F_HOOK              0x00008000UL // some hooks exist, so slow-path processing
+#define F_USE_SIMDJSON      0x00010000UL
+#define F_ENCODE_CORE_BOOLS 0x00020000UL
 
 #define F_PRETTY    F_INDENT | F_SPACE_BEFORE | F_SPACE_AFTER
 
@@ -886,6 +887,16 @@ encode_sv (enc_t *enc, SV *sv)
 {
   SvGETMAGIC (sv);
 
+#if PERL_VERSION_GE(5,36,0)
+  if (enc->json.flags & F_ENCODE_CORE_BOOLS && SvIsBOOL (sv))
+    {
+      if (SvTRUE_nomg_NN (sv))
+        encode_str (enc, "true", 4, 0);
+      else
+        encode_str (enc, "false", 5, 0);
+    }
+  else /* continues after the endif! */
+#endif
   if (SvPOKp (sv))
     {
       STRLEN len;
@@ -2268,22 +2279,23 @@ void get_boolean_values (JSON *self)
 
 void ascii (JSON *self, int enable = 1)
 	ALIAS:
-        ascii           = F_ASCII
-        latin1          = F_LATIN1
-        utf8            = F_UTF8
-        indent          = F_INDENT
-        canonical       = F_CANONICAL
-        space_before    = F_SPACE_BEFORE
-        space_after     = F_SPACE_AFTER
-        pretty          = F_PRETTY
-        allow_nonref    = F_ALLOW_NONREF
-        shrink          = F_SHRINK
-        allow_blessed   = F_ALLOW_BLESSED
-        convert_blessed = F_CONV_BLESSED
-        relaxed         = F_RELAXED
-        allow_unknown   = F_ALLOW_UNKNOWN
-        allow_tags      = F_ALLOW_TAGS
-        use_simdjson    = F_USE_SIMDJSON
+        ascii             = F_ASCII
+        latin1            = F_LATIN1
+        utf8              = F_UTF8
+        indent            = F_INDENT
+        canonical         = F_CANONICAL
+        space_before      = F_SPACE_BEFORE
+        space_after       = F_SPACE_AFTER
+        pretty            = F_PRETTY
+        allow_nonref      = F_ALLOW_NONREF
+        shrink            = F_SHRINK
+        allow_blessed     = F_ALLOW_BLESSED
+        convert_blessed   = F_CONV_BLESSED
+        relaxed           = F_RELAXED
+        allow_unknown     = F_ALLOW_UNKNOWN
+        allow_tags        = F_ALLOW_TAGS
+        use_simdjson      = F_USE_SIMDJSON
+        encode_core_bools = F_ENCODE_CORE_BOOLS
 	PPCODE:
 {
         if (enable)
@@ -2301,21 +2313,22 @@ void ascii (JSON *self, int enable = 1)
 
 void get_ascii (JSON *self)
 	ALIAS:
-        get_ascii           = F_ASCII
-        get_latin1          = F_LATIN1
-        get_utf8            = F_UTF8
-        get_indent          = F_INDENT
-        get_canonical       = F_CANONICAL
-        get_space_before    = F_SPACE_BEFORE
-        get_space_after     = F_SPACE_AFTER
-        get_allow_nonref    = F_ALLOW_NONREF
-        get_shrink          = F_SHRINK
-        get_allow_blessed   = F_ALLOW_BLESSED
-        get_convert_blessed = F_CONV_BLESSED
-        get_relaxed         = F_RELAXED
-        get_allow_unknown   = F_ALLOW_UNKNOWN
-        get_allow_tags      = F_ALLOW_TAGS
-        get_use_simdjson    = F_USE_SIMDJSON
+        get_ascii             = F_ASCII
+        get_latin1            = F_LATIN1
+        get_utf8              = F_UTF8
+        get_indent            = F_INDENT
+        get_canonical         = F_CANONICAL
+        get_space_before      = F_SPACE_BEFORE
+        get_space_after       = F_SPACE_AFTER
+        get_allow_nonref      = F_ALLOW_NONREF
+        get_shrink            = F_SHRINK
+        get_allow_blessed     = F_ALLOW_BLESSED
+        get_convert_blessed   = F_CONV_BLESSED
+        get_relaxed           = F_RELAXED
+        get_allow_unknown     = F_ALLOW_UNKNOWN
+        get_allow_tags        = F_ALLOW_TAGS
+        get_use_simdjson      = F_USE_SIMDJSON
+        get_encode_core_bools = F_ENCODE_CORE_BOOLS
 	PPCODE:
         XPUSHs (boolSV (self->flags & ix));
 
