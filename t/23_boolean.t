@@ -36,9 +36,9 @@ use JSON::SIMD;
 	ok $recovered_bools[1], "true is true";
 
 	if ($] >= 5.036) {
-		is $J->get_core_bools, 1, "manually set core booleans on >= 5.36 perls are core";
+		is $J->get_core_bools, !!1, "manually set core booleans on >= 5.36 perls are core";
 	} else {
-		is $J->get_core_bools, 0, "manually set core booleans on < 5.36 perls are not core";
+		is $J->get_core_bools, !!0, "manually set core booleans on < 5.36 perls are not core";
 	}
 }
 
