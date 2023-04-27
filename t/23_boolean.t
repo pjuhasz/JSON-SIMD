@@ -56,6 +56,32 @@ use JSON::SIMD;
 	ok $recovered_bools[1], "true is true";
 
 	is $J->get_core_bools, 1, "manually set core booleans on >= 5.36 perls are core";
+
+	$J->core_bools(0);
+	my $decoded2 = $J->decode($json);
+	ok !$decoded2->[0], "false is false";
+	ok $decoded2->[1], "true is true";
+	ok ref $decoded2->[0] eq 'JSON::PP::Boolean', 'default boolean';
+	ok ref $decoded2->[1] eq 'JSON::PP::Boolean', 'default boolean';
+}
+
+# is_bool
+{
+	my $true = JSON::SIMD::true;
+	my $false = JSON::SIMD::false;
+	ok JSON::SIMD::is_bool($false), 'our false is_bool according to ourselves';
+	ok JSON::SIMD::is_bool($true), 'our true is_bool according to ourselves';
+
+	my $truer = !!1;
+	my $falser = !!0;
+
+	if ($] >= 5.036) {
+		ok JSON::SIMD::is_bool($falser), 'builtin false is_bool according to ourselves';
+		ok JSON::SIMD::is_bool($truer), 'builtin true is_bool according to ourselves';
+	} else {
+		ok !JSON::SIMD::is_bool($falser), 'builtin false is_bool according to ourselves';
+		ok !JSON::SIMD::is_bool($truer), 'builtin true is_bool according to ourselves';
+	}
 }
 
 # encode core bools
@@ -65,7 +91,7 @@ SKIP: {
 	BEGIN {
 		# this section was taken from Cpanel::JSON::XS
 		warnings->unimport('experimental::builtin') if $] >= 5.036;
-		builtin->import (qw/true false is_bool/) if $] >= 5.036;
+		builtin->import (qw/true false/) if $] >= 5.036;
 		# avoid syntax errors on old perls
 		eval q[
 			   sub true { !0 }
@@ -88,8 +114,11 @@ SKIP: {
 		is $json2, $expected, 'core booleans are encoded to json booleans after round-trip';
 
 		my $aref2 = $J->decode($json2);
-		ok is_bool($aref2->[0]), 'decoded false is_bool';
-		ok is_bool($aref2->[1]), 'decoded true is_bool';
+		ok builtin::is_bool($aref2->[0]), 'decoded false is_bool';
+		ok builtin::is_bool($aref2->[1]), 'decoded true is_bool';
+
+		ok JSON::SIMD::is_bool($aref2->[0]), 'decoded false is_bool according to ourselves';
+		ok JSON::SIMD::is_bool($aref2->[1]), 'decoded true is_bool according to ourselves';
 	}
 
 	{
@@ -105,10 +134,9 @@ SKIP: {
 		is $json2, $expected, 'core booleans are encoded to json booleans after round-trip';
 
 		my $aref2 = $J->decode($json2);
-		ok is_bool($aref2->[0]), 'decoded false is_bool';
-		ok is_bool($aref2->[1]), 'decoded true is_bool';
+		ok builtin::is_bool($aref2->[0]), 'decoded false is_bool';
+		ok builtin::is_bool($aref2->[1]), 'decoded true is_bool';
 	}
-
 
 }
 
