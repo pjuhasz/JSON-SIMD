@@ -356,21 +356,30 @@ static SV* recursive_parse_json(pTHX_ dec_t *dec, T element) {
       break;
     }
   case ondemand::json_type::null:
-    bool is_null;
-    auto err = element.is_null().get(is_null);
-    if(simdjson_unlikely(!is_null || err)) {
-      // we falsify the error, it would be either nothing or INCORRECT_TYPE, which is less informative
-      if (err == 0 || err == INCORRECT_TYPE) {
-        dec->error_code = N_ATOM_ERROR;
-      } else {
-        // for scalar documents it can detect trailing content
-        dec->error_code = err;
+    {
+      bool is_null;
+      auto err = element.is_null().get(is_null);
+      if(simdjson_unlikely(!is_null || err)) {
+        // we falsify the error, it would be either nothing or INCORRECT_TYPE, which is less informative
+        if (err == 0 || err == INCORRECT_TYPE) {
+          dec->error_code = N_ATOM_ERROR;
+        } else {
+          // for scalar documents it can detect trailing content
+          dec->error_code = err;
+        }
+        dec->error_line_number = __LINE__;
+        return NULL;
       }
+      res = newSVsv (&PL_sv_undef);
+      break;
+    }
+  case ondemand::json_type::unknown:
+    {
+      // do we ever want to report anything else from here?
+      dec->error_code = TAPE_ERROR;
       dec->error_line_number = __LINE__;
       return NULL;
     }
-    res = newSVsv (&PL_sv_undef);
-    break;
   }
   return res;
 }
@@ -530,9 +539,11 @@ SV * simdjson_decode(dec_t *dec) {
       ondemand::document doc2;
       size_t size = find_end_of_scalar(SvPVX(dec->input));
 
-      auto err = parser->iterate(SvPVX(dec->input), size, SvLEN(dec->input)).get(doc2);
-      ERROR_RETURN_SAVE_MSG;
-      sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc2);
+      if (size > 0) {
+        auto err = parser->iterate(SvPVX(dec->input), size, SvLEN(dec->input)).get(doc2);
+        ERROR_RETURN_SAVE_MSG;
+        sv = recursive_parse_json<ondemand::document&>(aTHX_ dec, doc2);
+      }
       location = SvPVX(dec->input) + size;
     } else {
       // desperate, gnarly hack:
