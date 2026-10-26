@@ -90,6 +90,9 @@ static inline int validate_large_number(std::string_view& s) {
       got_decimal = true;
       if (i+1 == s.length())
         return CERR_NUMBER_DECIMAL;
+      // peek ahead for illegal exponent after dot
+      if (s[i+1] == 'e' || s[i+1] == 'E')
+        return CERR_NUMBER_DECIMAL;
     }
     if (s[i] == 'e' || s[i] == 'E') {
       got_exp = true;
@@ -262,6 +265,13 @@ static SV* recursive_parse_json(pTHX_ dec_t *dec, T element) {
         ERROR_RETURN_IF(TRAILING_CONTENT);
 
         // simdjson 3.13+ natively handles big integers
+        // - or actually, it doesn't quite
+        if (err == BIGINT_ERROR) {
+          // we save it as a string, and at this point simdjson has hopefully validated it for us
+          auto str = get_raw_json_token_from(element);
+          res = newSVpvn_utf8(str.data(), str.size(), 1);
+          break;
+        }
 
         // old way of handling case of large numbers:
         // we save it as a string, but try to validate if it looks like a number at least
@@ -318,6 +328,7 @@ static SV* recursive_parse_json(pTHX_ dec_t *dec, T element) {
         }
       case ondemand::number_type::big_integer:
         {
+          // XXX we never get here
           // handle case of large numbers:
           // we save it as a string, and at this point simdjson has hopefully validated it for us
           auto str = get_raw_json_token_from(element);
