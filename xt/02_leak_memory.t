@@ -59,4 +59,22 @@ no_leaks_ok {
 	my $perl = $J->decode_at_pointer($json, '/params');
 } "decode_at_pointer emulation does not leak SVs";
 
+# Allocates a string chunk before encountering an invalid escape:
+my $bad_value = '["' . ('a' x 20000) . '\q"]';
+no_growth {
+		eval {my $perl = $J_longlived->decode($bad_value);}
+	}
+	calls   => 5000000,
+	burn_in => 10,
+	'decode with persistent object does not leak for malformed string';
+
+# Forces the slow key path, then omits the colon:
+my $bad_key = '{"' . ('k' x 100) . '" 0}';
+no_growth {
+		eval{my $perl = $J_longlived->decode($bad_key);}
+	}
+	calls   => 5000000,
+	burn_in => 10,
+	'decode with persistent object does not leak for malformed hash key';
+
 done_testing();
