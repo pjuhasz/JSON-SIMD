@@ -176,9 +176,6 @@ static inline bool validate_ascii(const char *buf, size_t len) noexcept {
     } \
   } while (0)
 
-// XXX keep in sync w XS.xs
-#define F_HOOK           0x00008000UL // some hooks exist, so slow-path processing
-
 // There is some special kind of perversion going on that both C++'s advanced template magic
 // and threaded Perl's THX_ voodoo are present, yet the whole thing still works.
 template<typename T>
@@ -249,10 +246,6 @@ static SV* recursive_parse_json(pTHX_ dec_t *dec, T element) {
 
       DEC_DEC_DEPTH;
       res = newRV_noinc ((SV *)hv);
-
-      if (simdjson_unlikely(dec->json.flags & F_HOOK)) {
-        res = filter_object(dec, res, hv);
-      }
 
       break;
     }

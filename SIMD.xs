@@ -1920,8 +1920,10 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
   dec.err   = 0;
   dec.depth = 0;
 
-  if (dec.json.cb_object || dec.json.cb_sk_object)
+  if (dec.json.cb_object || dec.json.cb_sk_object) {
     dec.json.flags |= F_HOOK;
+    dec.json.flags &= ~F_USE_SIMDJSON;
+  }
 
   *dec.end = 0; // this should basically be a nop, too, but make sure it's there
 
@@ -2392,6 +2394,9 @@ void filter_json_object (JSON *self, SV *cb = &PL_sv_undef)
 {
         SvREFCNT_dec (self->cb_object);
         self->cb_object = SvOK (cb) ? newSVsv (cb) : 0;
+        if (self->cb_object) {
+          self->flags &= ~F_USE_SIMDJSON;
+        }
 
         XPUSHs (ST (0));
 }
@@ -2414,6 +2419,9 @@ void filter_json_single_key_object (JSON *self, SV *key, SV *cb = &PL_sv_undef)
                 self->cb_sk_object = 0;
               }
           }
+        if (self->cb_sk_object) {
+          self->flags &= ~F_USE_SIMDJSON;
+        }
 
         XPUSHs (ST (0));
 }

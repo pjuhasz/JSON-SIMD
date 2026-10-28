@@ -455,8 +455,8 @@ resource files etc.)
 If C<$enable> is false (the default), then C<decode> will only accept
 valid JSON texts.
 
-This option is not compatible with C<use_simdjson>, and using this option
-will silently disable simdjson mode.
+I<This option is not compatible with C<use_simdjson>, and using this option
+will silently disable simdjson mode.>
 
 Currently accepted extensions are:
 
@@ -692,6 +692,9 @@ Example, convert all JSON objects into the integer 5:
    # so a lone 5 is not allowed.
    $js->decode ('{"a":1, "b":2}');
 
+I<This method is not compatible with C<use_simdjson>, and using a filter callback
+will silently disable simdjson mode.>
+
 =item $json = $json->filter_json_single_key_object ($key [=> $coderef->($value)])
 
 Works remotely similar to C<filter_json_object>, but is only called for
@@ -743,6 +746,9 @@ into the corresponding C<< $WIDGET{<id>} >> object:
 
       { __widget__ => $self->{id} }
    }
+
+I<This method is not compatible with C<use_simdjson>, and using a filter callback
+will silently disable simdjson mode.>
 
 =item $json = $json->shrink ([$enable])
 
