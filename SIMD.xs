@@ -1015,124 +1015,262 @@ encode_json (SV *scalar, JSON *json)
 static SV *
 emulate_at_pointer (SV *sv, SV *path)
 {
-  if (!path ) {
-    return sv;
+  static const char err_pointer[] =
+    "INVALID_JSON_POINTER: Invalid JSON pointer syntax";
+  static const char err_type[] =
+    "INCORRECT_TYPE: The JSON element does not have the requested type";
+  static const char err_bounds[] =
+    "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array "
+    "that is beyond its length";
+  static const char err_field[] =
+    "NO_SUCH_FIELD: The JSON field referenced does not exist in this object";
+
+  SV *current;
+  SV *path_copy;
+  SV *key_sv;
+  const char *text;
+  STRLEN text_len;
+  STRLEN pos;
+
+  /*
+   * Keep our own scalar holding the current value. For a reference this
+   * increments ownership of its referent; it does not deep-copy the tree.
+   *
+   * All allocations are mortal, so croak() paths require no explicit
+   * cleanup. The caller must provide the normal Perl temporary scope.
+   */
+  current = sv_2mortal (newSVsv (sv));
+
+  /* Preserve the internal convention that NULL means no pointer. */
+  if (!path)
+    return current;
+
+  /*
+   * Fetch/copy the argument before stringification and UTF-8 conversion.
+   * Never upgrade or write into the caller's path scalar.
+   *
+   * SvPVutf8 supplies the byte length, including any embedded NULs.
+   * Do not modify path_copy after obtaining text.
+   */
+  path_copy = sv_2mortal (newSVsv (path));
+  text = SvPVutf8 (path_copy, text_len);
+
+  /* The empty pointer selects the complete document. */
+  if (text_len == 0)
+    return current;
+
+  if (text[0] != '/')
+    croak ("%s", err_pointer);
+
+  /*
+   * Preserve the existing scalar-document diagnostic, including for
+   * booleans represented as references to scalars.
+   */
+  if (!SvROK (current))
+    croak ("only the empty path is allowed for scalar documents");
+
+  {
+    svtype type = SvTYPE (SvRV (current));
+
+    if (type != SVt_PVAV && type != SVt_PVHV)
+      croak ("only the empty path is allowed for scalar documents");
   }
 
-  SvUPGRADE (path, SVt_PV);
-  sv_utf8_upgrade (path);
+  /*
+   * Reuse a Perl-managed token buffer. sv_setpvn() supplies writable
+   * storage and room for its terminating NUL.
+   */
+  key_sv = sv_2mortal (newSVpvn ("", 0));
+  pos = 1;                      /* Skip the initial slash. */
 
-  char *orig = SvPVX(path);
-  size_t len = SvCUR(path);
-  SvGROW(path, SvCUR (path) + 1); // should basically be a NOP
-  orig[len+1] = '\0';
+  for (;;)
+    {
+      SV *container;
+      SV *next;
+      svtype type;
+      STRLEN start;
+      STRLEN raw_len;
+      STRLEN read_pos;
+      STRLEN write_pos;
+      STRLEN key_len;
+      char *key;
 
-  // empty path allowed (for scalars and , addresses the entire document
-  if (len == 0) {
-    return sv;
-  }
+      /*
+       * This check is required on EVERY iteration, not just at the root.
+       * A selected scalar is valid only when no components remain.
+       */
+      if (!SvROK (current))
+        croak ("%s", err_type);
 
-  if (!SvROK(sv)) {
-    croak("only the empty path is allowed for scalar documents");
-  }
+      container = SvRV (current);
+      type = SvTYPE (container);
 
-  if (orig[0] != '/') {
-    croak("INVALID_JSON_POINTER: Invalid JSON pointer syntax");
-  }
-  orig++;
+      if (type != SVt_PVAV && type != SVt_PVHV)
+        croak ("%s", err_type);
 
-  char *key;
-  Newx(key, len, char);
+      /*
+       * Split on literal slashes before unescaping. An escaped slash
+       * (~1) belongs to the token and must not become a separator.
+       *
+       * pos may equal text_len: this represents a trailing empty token.
+       */
+      start = pos;
 
-  char *err;
-  char done = 0;
-  while (!done) {
-    svtype reftype = SvTYPE(SvRV(sv));
-    char *p = key;
-    char got_key = 0;
+      while (pos < text_len && text[pos] != '/')
+        ++pos;
 
-    memset(key, 0, len);
+      raw_len = pos - start;
+      sv_setpvn (key_sv, text + start, raw_len);
+      key = SvPVX (key_sv);
 
-    while (!got_key) {
-      switch (*orig) {
-        case '~':
-          orig++;
-          if (*orig == '0') {
-            *p++ = '~';
-          } else if (*orig == '1') {
-            *p++ = '/';
-          } else {
-            err = "INVALID_JSON_POINTER: Invalid JSON pointer syntax";
-            goto emulate_fail;
-          }
-          orig++;
-          break;
-        case '/':
-          got_key = 1;
-          orig++;
-          break;
-        case '\0':
-          done = 1;
-          got_key = 1;
-          break;
-        default:
-          *p++ = *orig++;
-      }
+      /*
+       * Decode in place. Decoding never increases the token length,
+       * so the write position cannot overtake the read position.
+       *
+       * An embedded NUL is copied like any other ordinary character.
+       */
+      read_pos = 0;
+      write_pos = 0;
+
+      while (read_pos < raw_len)
+        {
+          char ch = key[read_pos++];
+
+          if (ch == '~')
+            {
+              if (read_pos == raw_len)
+                croak ("%s", err_pointer);
+
+              ch = key[read_pos++];
+
+              if (ch == '0')
+                ch = '~';
+              else if (ch == '1')
+                ch = '/';
+              else
+                croak ("%s", err_pointer);
+            }
+
+          key[write_pos++] = ch;
+        }
+
+      key_len = write_pos;
+      key[key_len] = '\0';
+      SvCUR_set (key_sv, key_len);
+
+      /*
+       * text was obtained with SvPVutf8(); decoding ASCII escapes
+       * preserves that encoding. This also handles ASCII-only keys.
+       */
+      SvUTF8_on (key_sv);
+
+      if (type == SVt_PVAV)
+        {
+          AV *av = (AV *)container;
+          SV **element;
+          SSize_t last;
+          STRLEN i;
+          UV index = 0;
+
+          /* RFC 6901 array indices: 0 or [1-9][0-9]*. */
+          if (key_len == 0)
+            croak ("%s", err_pointer);
+
+          if (key_len > 1 && key[0] == '0')
+            croak ("%s", err_pointer);
+
+          /*
+           * "-" denotes the position after the last element, not an
+           * existing element that this operation can return.
+           */
+          if (key_len == 1 && key[0] == '-')
+            croak ("%s", err_bounds);
+
+          /*
+           * Validate the entire token before converting it. Do not
+           * accept signs, whitespace, exponents, decimal points or NUL.
+           */
+          for (i = 0; i < key_len; ++i)
+            {
+              unsigned char ch = (unsigned char)key[i];
+
+              if (ch < '0' || ch > '9')
+                croak ("%s", err_type);
+            }
+
+          for (i = 0; i < key_len; ++i)
+            {
+              UV digit = (UV)((unsigned char)key[i] - '0');
+
+              if (index > (UV_MAX - digit) / 10)
+                croak ("%s", err_bounds);
+
+              index = index * 10 + digit;
+            }
+
+          last = av_len (av);
+
+          /*
+           * Check the negative empty-array sentinel before converting
+           * to UV. The successful comparison also makes the later
+           * conversion to SSize_t safe.
+           */
+          if (last < 0 || index > (UV)last)
+            croak ("%s", err_bounds);
+
+          element = av_fetch (av, (SSize_t)index, 0);
+
+          if (!element || !*element)
+            croak ("%s", err_bounds);
+
+          next = *element;
+        }
+      else
+        {
+          HE *entry;
+
+          /*
+           * Perl hash keys ultimately use a signed I32 byte length.
+           * Do not allow an oversized token to reach a narrowing
+           * conversion inside the hash implementation.
+           */
+          if (key_len > (STRLEN)I32_MAX)
+            croak ("INVALID_JSON_POINTER: object key is too long");
+
+          /*
+           * The key SV carries both its length and UTF-8 flag.
+           * Embedded NULs and the empty key remain significant.
+           */
+          entry = hv_fetch_ent ((HV *)container, key_sv, 0, 0);
+
+          if (!entry)
+            croak ("%s", err_field);
+
+          next = HeVAL (entry);
+
+          if (!next)
+            croak ("%s", err_field);
+        }
+
+      /*
+       * Copy the selected scalar before advancing. Besides protecting
+       * the returned value's lifetime, this avoids retaining a borrowed
+       * hash/array slot across subsequent Perl API calls.
+       *
+       * The previous current value remains mortal and therefore alive
+       * until the enclosing temporary scope is cleaned up.
+       */
+      current = sv_2mortal (newSVsv (next));
+
+      if (pos == text_len)
+        return current;
+
+      /*
+       * text[pos] is a separator. Always process the following token,
+       * even if it is empty because this is the final slash.
+       */
+      ++pos;
     }
-    
-    if (reftype == SVt_PVAV) {
-      if (p == key || (p - key > 1 && key[0] == '0')) {
-        // empty string and numbers prefixed with 0 are not valid for arrays
-        err = "INVALID_JSON_POINTER: Invalid JSON pointer syntax";
-        goto emulate_fail;
-      } else if (p - key == 1 && key[0] == '-') {
-        // - means "the append position" or "the element after the end of the array"
-        // We don't support this, because we're returning a real element, not a position.
-        err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
-        goto emulate_fail;
-      }
-
-      UV idx;
-      int res = grok_number(key, p-key, &idx);
-
-      if (!(res & IS_NUMBER_IN_UV) || res & (IS_NUMBER_GREATER_THAN_UV_MAX|IS_NUMBER_NOT_INT|IS_NUMBER_NEG|IS_NUMBER_INFINITY|IS_NUMBER_NAN)) {
-        err = "INCORRECT_TYPE: The JSON element does not have the requested type";
-        goto emulate_fail;
-      }
-
-      AV *av = (AV*) SvRV(sv);
-      SSize_t last_idx = AvFILL(av);
-      if (idx > last_idx) {
-        err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
-        goto emulate_fail;
-      }
-
-      SV **elem = av_fetch(av, idx, 0);
-      if (elem && *elem) {
-        sv = *elem;
-      } else {
-        // ?
-        err = "INDEX_OUT_OF_BOUNDS: Attempted to access an element of a JSON array that is beyond its length";
-        goto emulate_fail;
-      }
-    } else if (reftype == SVt_PVHV) {
-      // TODO unicode keys?
-      SV **elem = hv_fetch((HV*) SvRV(sv), key, -(p-key), 0);
-      if (elem && *elem) {
-        sv = *elem;
-      } else {
-        err = "NO_SUCH_FIELD: The JSON field referenced does not exist in this object";
-        goto emulate_fail;
-      }
-    }
-  } 
-
-  Safefree(key);
-  return sv;
-
-emulate_fail:
-  Safefree(key);
-  croak("%s", err);
 }
 
 INLINE void
