@@ -883,7 +883,8 @@ This method croaks if the path is malformed, or it refers to a nonexistent
 part of the document.
 
 This method works in both simdjson mode and with the legacy decoder,
-however, for the latter it doesn't provide any speed or memory advantages.
+however, for the latter it is emulated by decoding the whole document normally,
+then dropping the unneeded parts, and thus doesn't provide any speed or memory advantages.
 
 =back
 
