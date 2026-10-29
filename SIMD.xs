@@ -2352,6 +2352,81 @@ interrupt:
   //printf ("return pos %d mode %d nest %d\n", self->incr_pos, self->incr_mode, self->incr_nest);//D
 }
 
+/*
+ * Either supply two source SVs, or two NULLs to restore defaults.
+ * Each non-NULL self->v_* field owns one reference.
+ */
+static void
+json_set_boolean_values (pTHX_ JSON *self,
+                         SV *src_false, SV *src_true,
+                         int core_bools)
+{
+  SV *new_false = NULL;
+  SV *new_true  = NULL;
+  SV *old_false;
+  SV *old_true;
+
+  ENTER;
+  SAVETMPS;
+
+  /*
+   * Protect BOTH inputs before copying either one. Copying a magical
+   * input may execute Perl code, including another setter call.
+   */
+  if (src_false)
+    SAVEFREESV (SvREFCNT_inc (src_false));
+  if (src_true)
+    SAVEFREESV (SvREFCNT_inc (src_true));
+
+  /*
+   * Mortalize the destination BEFORE copying into it, so a croak
+   * during get-magic cannot strand an unowned destination scalar.
+   */
+  if (src_false)
+    {
+      new_false = sv_2mortal (newSV (0));
+      sv_setsv (new_false, src_false);
+    }
+
+  if (src_true)
+    {
+      new_true = sv_2mortal (newSV (0));
+      sv_setsv (new_true, src_true);
+    }
+
+  /*
+   * Read the old fields only after copying: input magic may have
+   * re-entered the setter and changed them.
+   */
+  old_false = self->v_false;
+  old_true  = self->v_true;
+
+  /*
+   * Publish the complete replacement before releasing anything that
+   * might invoke DESTROY and re-enter Perl.
+   */
+  self->v_false = new_false ? SvREFCNT_inc (new_false) : NULL;
+  self->v_true  = new_true  ? SvREFCNT_inc (new_true)  : NULL;
+
+  if (core_bools)
+    self->flags |= F_CORE_BOOLS;
+  else
+    self->flags &= ~F_CORE_BOOLS;
+
+  /*
+   * Transfer the old fields' owned references to scope cleanup.
+   * Neither SAVEFREESV call increments the reference count.
+   */
+  if (old_false)
+    SAVEFREESV (old_false);
+  if (old_true)
+    SAVEFREESV (old_true);
+
+  FREETMPS;
+  LEAVE;
+}
+
+
 /////////////////////////////////////////////////////////////////////////////
 // XS interface functions
 
@@ -2406,11 +2481,18 @@ void new (char *klass)
 }
 
 void boolean_values (JSON *self, SV *v_false = 0, SV *v_true = 0)
-	PPCODE:
-        self->flags   &= ~F_CORE_BOOLS;
-        self->v_false = newSVsv (v_false);
-        self->v_true  = newSVsv (v_true);
+        PPCODE:
+{
+        /* JSON::XS used to accept a single argument and silently set v_true to null. */
+        if (v_false && !v_true)
+          croak ("boolean_values requires either zero or two arguments");
+
+        PUTBACK;
+        json_set_boolean_values (aTHX_ self, v_false, v_true, 0);
+        SPAGAIN;
+
         XPUSHs (ST (0));
+}
 
 void get_boolean_values (JSON *self)
 	PPCODE:
@@ -2421,21 +2503,21 @@ void get_boolean_values (JSON *self)
             PUSHs (self->v_true);
           }
 
+
 void core_bools (JSON *self, int enable = 1)
-	PPCODE:
-        if (enable)
-          {
-            self->flags   |= F_CORE_BOOLS;
-            self->v_false = newSVsv (&PL_sv_no);
-            self->v_true  = newSVsv (&PL_sv_yes);
-          }
-        else
-          {
-            self->flags   &= ~F_CORE_BOOLS;
-            self->v_false = 0;
-            self->v_true  = 0;
-          }
+        PPCODE:
+{
+        PUTBACK;
+        json_set_boolean_values (
+          aTHX_ self,
+          enable ? &PL_sv_no  : NULL,
+          enable ? &PL_sv_yes : NULL,
+          enable
+        );
+        SPAGAIN;
+
         XPUSHs (ST (0));
+}
 
 void get_core_bools (JSON *self)
 	PPCODE:

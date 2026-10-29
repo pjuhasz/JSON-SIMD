@@ -637,6 +637,10 @@ assigning a value to another variable, i.e. C<$copy = $false>).
 Calling this method without any arguments will reset the booleans
 to their default values.
 
+(Calling C<boolean_values> with I<one> argument will croak.
+This is a breaking change with respect to JSON::XS: it used to silently
+set the true value to undef in that case.)
+
 C<get_boolean_values> will return both C<$false> and C<$true> values, or
 the empty list when they are set to the default.
 

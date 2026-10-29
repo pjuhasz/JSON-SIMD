@@ -77,4 +77,22 @@ no_growth {
 	burn_in => 10,
 	'decode with persistent object does not leak for malformed hash key';
 
+# setting to arbitrary values many times, to test leaked scalars
+{
+	my $J = JSON::SIMD->new;
+	my $false = "nay" x 10000;
+	my $true = "yea" x 10000;
+	my $json = '[false, true]';
+
+	no_growth {
+		$J->boolean_values($false, $true);
+		$J->decode($json);
+		$J->core_bools;
+		$J->decode($json);
+	}
+	calls => 50000,
+	burn_in => 10,
+	'setting booleans repeatedly does not leak scalars';
+}
+
 done_testing();
