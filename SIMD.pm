@@ -1988,12 +1988,12 @@ afterwards.
 =head1 SOME HISTORY
 
 The idea for this module came in 2023 when I learned about
-simdjson, and found that one particular language is conspicuously missing
+simdjson, and found that one particular language was conspicuously missing
 from the list of bindings and ports. The impulse to remedy that situation
 and produce a working Perl binding, bringing the latest and greatest
 advances in JSON parsing to Perl users, resulted in this module.
 
-JSON::XS was chosen as the basis for the fork because I has been
+JSON::XS was chosen as the basis for the fork because I have been
 using that module at $work and elsewhere without problems, so preserving
 compatibility with it was seen as an important goal.
 

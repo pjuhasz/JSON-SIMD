@@ -1674,8 +1674,7 @@ fail:
   return 0;
 }
 
-// not static because we call it from simdjson too
-SV *
+static SV *
 filter_object (dec_t *dec, SV *sv, HV* hv)
 {
   if (dec->json.cb_sk_object && HvKEYS (hv) == 1)
@@ -1700,7 +1699,7 @@ filter_object (dec_t *dec, SV *sv, HV* hv)
           XPUSHs (HeVAL (he));
           sv_2mortal (sv);
 
-          PUTBACK; count = call_sv (HeVAL (cb), G_LIST); SPAGAIN;
+          PUTBACK; count = call_sv (sv_2mortal (SvREFCNT_inc (HeVAL (cb))), G_ARRAY); SPAGAIN;
 
           if (count == 1)
             {
@@ -2072,6 +2071,12 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
   dec.end   = SvEND (string);
   dec.err   = 0;
   dec.depth = 0;
+
+  /* a filter may replace or remove these while this decode still uses them */
+  if (dec.json.cb_object)
+    sv_2mortal (SvREFCNT_inc (dec.json.cb_object));
+  if (dec.json.cb_sk_object)
+    sv_2mortal (SvREFCNT_inc ((SV *)dec.json.cb_sk_object));
 
   if (dec.json.cb_object || dec.json.cb_sk_object) {
     dec.json.flags |= F_HOOK;
