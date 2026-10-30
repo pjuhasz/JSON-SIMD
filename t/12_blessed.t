@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..14\n"; }
+BEGIN { $| = 1; print "1..18\n"; }
 
 use JSON::SIMD;
 
@@ -49,3 +49,10 @@ ok($js->get_use_simdjson == 1);
 $js->filter_json_single_key_object ("a");
 $js->use_simdjson(1);
 ok($js->get_use_simdjson == 1);
+
+
+my $json = JSON::SIMD->new->allow_tags->max_depth(32);
+ok( !eval { $json->decode('(' x 1000) } );     # "catch deeply nested allow_tags->max_depth"
+ok( $@ =~ qr/maximum nesting level/);           # "caught allow_tags->max_depth"
+ok( !eval { $json->decode('("a")' x 1000) } ); # "catch large linear allow_tags->max_depth"
+ok( $@ =~ qr/maximum nesting level/);          # "caught allow_tags->max_depth"

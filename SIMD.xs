@@ -1870,7 +1870,9 @@ decode_tag (dec_t *dec)
 
   decode_ws (dec);
 
+  DEC_INC_DEPTH; /* a "(" here recurses straight back into decode_tag */
   tag = decode_sv (dec);
+  DEC_DEC_DEPTH;
   if (!tag)
     goto fail;
 
@@ -1886,7 +1888,14 @@ decode_tag (dec_t *dec)
 
   decode_ws (dec);
 
-  val = decode_sv (dec);
+  if (*dec->cur == '[')
+    val = decode_sv (dec); /* decode_av charges this level */
+  else
+    {
+      DEC_INC_DEPTH; /* ("a")("a")... recurses through the value too */
+      val = decode_sv (dec);
+      DEC_DEC_DEPTH;
+    }
   if (!val)
     goto fail;
 
