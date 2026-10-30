@@ -1778,7 +1778,10 @@ decode_hv (dec_t *dec)
                   if (!key)
                     goto fail;
 
-                  decode_ws (dec); EXPECT_CH (':');
+                  decode_ws (dec);
+                  if (*dec->cur != ':')
+                    SvREFCNT_dec (key);
+                  EXPECT_CH (':');
 
                   decode_ws (dec);
                   value = decode_sv (dec);

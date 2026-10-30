@@ -59,23 +59,26 @@ no_leaks_ok {
 	my $perl = $J->decode_at_pointer($json, '/params');
 } "decode_at_pointer emulation does not leak SVs";
 
-# Allocates a string chunk before encountering an invalid escape:
-my $bad_value = '["' . ('a' x 20000) . '\q"]';
-no_growth {
-		eval {my $perl = $J_longlived->decode($bad_value);}
-	}
-	calls   => 5000000,
-	burn_in => 10,
-	'decode with persistent object does not leak for malformed string';
+for my $mode (0, 1) {
+	my $J = JSON::SIMD->new->use_simdjson($mode);
+	# Allocates a string chunk before encountering an invalid escape:
+	my $bad_value = '["' . ('a' x 200) . '\q"]';
+	no_growth {
+			eval {my $perl = $J->decode($bad_value);}
+		}
+		calls   => 5000000,
+		burn_in => 10,
+		'decode with persistent object does not leak for malformed string, use_simdjson='.$mode;
 
-# Forces the slow key path, then omits the colon:
-my $bad_key = '{"' . ('k' x 100) . '" 0}';
-no_growth {
-		eval{my $perl = $J_longlived->decode($bad_key);}
-	}
-	calls   => 5000000,
-	burn_in => 10,
-	'decode with persistent object does not leak for malformed hash key';
+	# Forces the slow key path, then omits the colon:
+	my $bad_key = '{"' . ('k' x 10000) . '" 0}';
+	no_growth {
+			eval{my $perl = $J->decode($bad_key);}
+		}
+		calls   => 5000000,
+		burn_in => 10,
+		'decode with persistent object does not leak for malformed hash key, use_simdjson='.$mode;
+}
 
 # setting to arbitrary values many times, to test leaked scalars
 {
@@ -94,5 +97,7 @@ no_growth {
 	burn_in => 10,
 	'setting booleans repeatedly does not leak scalars';
 }
+
+
 
 done_testing();
