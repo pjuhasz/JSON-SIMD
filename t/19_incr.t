@@ -3,7 +3,7 @@
 use strict;
 no warnings;
 use Test::More;
-BEGIN { plan tests => 745 };
+BEGIN { plan tests => 747 };
 
 use JSON::SIMD;
 
@@ -102,3 +102,9 @@ splitter +JSON::SIMD->new                  , ' 0.00E+00 ';
 }
 
 
+{
+  my $json = JSON::SIMD->new->use_simdjson(0)->max_size(64);
+  ok( !eval { my $v = $json->incr_parse("\0" . 'x' x 100); 1 }, 'raw NUL' );
+  $json = JSON::SIMD->new->use_simdjson(0)->max_size(64);
+  ok( !eval { $json->incr_parse('[' . 'x' x 100); 1 }, 'void context' );
+}
