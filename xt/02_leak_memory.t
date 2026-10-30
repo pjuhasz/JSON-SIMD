@@ -62,7 +62,7 @@ no_leaks_ok {
 for my $mode (0, 1) {
 	my $J = JSON::SIMD->new->use_simdjson($mode);
 	# Allocates a string chunk before encountering an invalid escape:
-	my $bad_value = '["' . ('a' x 200) . '\q"]';
+	my $bad_value = '["' . ('a' x 20000) . '\q"]';
 	no_growth {
 			eval {my $perl = $J->decode($bad_value);}
 		}

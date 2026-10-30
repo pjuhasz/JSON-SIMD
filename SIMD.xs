@@ -1499,6 +1499,7 @@ decode_str (dec_t *dec)
 
 fail:
   dec->cur = dec_cur;
+  SvREFCNT_dec (sv);
   return 0;
 }
 
