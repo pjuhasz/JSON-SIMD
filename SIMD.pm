@@ -527,7 +527,7 @@ This setting has currently no effect on tied hashes.
 =item $enabled = $json->get_allow_nonref
 
 Unlike other boolean options, this option is enabled by default beginning
-with version C<4.0>. See L<SECURITY CONSIDERATIONS> for the gory details.
+with (JSON::XS) version C<4.0>. See L<SECURITY CONSIDERATIONS> for the gory details.
 
 If C<$enable> is true (or missing), then the C<encode> method can convert a
 non-reference into its corresponding string, number or null JSON value,
@@ -894,6 +894,8 @@ then dropping the unneeded parts, and thus doesn't provide any speed or memory a
 
 
 =head1 INCREMENTAL PARSING
+
+I<(The incremental parser is deprecated and will likely be removed in a future release.)>
 
 In some cases, there is the need for incremental parsing of JSON
 texts. While this module always has to keep both JSON text and resulting
