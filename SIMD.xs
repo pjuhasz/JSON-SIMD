@@ -1921,6 +1921,8 @@ decode_tag (dec_t *dec)
     dSP;
 
     ENTER; SAVETMPS;
+    SAVEFREESV (tag); /* also freed when THAW dies */
+    SAVEFREESV (val);
     PUSHMARK (SP);
     EXTEND (SP, len + 2);
     // we re-bless the reference to get overload and other niceties right
@@ -1934,8 +1936,6 @@ decode_tag (dec_t *dec)
     call_sv ((SV *)GvCV (method), G_SCALAR);
     SPAGAIN;
 
-    SvREFCNT_dec (tag);
-    SvREFCNT_dec (val);
     sv = SvREFCNT_inc (POPs);
 
     PUTBACK;
