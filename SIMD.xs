@@ -2809,7 +2809,40 @@ void incr_parse (JSON *self, SV *jsonstr = 0)
               if (!(self->flags & F_NONREF_SET) && incr_starts_bare_scalar (self))
                 croak ("incremental parsing of a top-level number, true, false or null needs an explicit allow_nonref");
 
-              PUTBACK; sv = decode_json (self->incr_text, self, &offset, 0); SPAGAIN;
+              SV *input = self->incr_text;
+
+              if (self->flags & F_USE_SIMDJSON)
+                {
+                  STRLEN len = self->incr_pos;
+
+                  /* Retain the existing whole-buffer size restriction. */
+                  if (self->max_size && SvCUR(input) > self->max_size)
+                    croak("incremental input exceeds max_size");
+
+                  if (!len || len > SvCUR(input))
+                    croak("invalid incremental document boundary");
+
+                  /*
+                   * Copy this document, not the unread suffix.
+                   * The existing decoder supplies any required SIMD padding.
+                   * This is wasteful and likely eats any performance
+                   * we would have gained from simdjson. The alternative
+                   * would have been making the simdjson wrapper intimately
+                   * aware of incremental parsing state, hurting the normal
+                   * hot path performance.
+                   * Not doing anything meant a quadratic performance breakdown.
+                   */
+                  input = sv_2mortal(newSVpvn(SvPVX(self->incr_text), len));
+
+                  if (SvUTF8(self->incr_text))
+                    SvUTF8_on(input);
+                }
+
+              PUTBACK;
+              sv = decode_json (input, self, &offset, 0);
+              SPAGAIN;
+
+
               XPUSHs (sv);
 
               self->incr_pos -= offset;

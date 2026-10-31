@@ -111,5 +111,5 @@ splitter +JSON::SIMD->new->use_simdjson(0)->allow_nonref (1), ' 0.00E+00 ';
 for my $bare (qw(1 -1.5 null true false)) {
 	ok( !eval { my @v = JSON::SIMD->new->use_simdjson(0)->incr_parse($bare); 1 }, "require explicit allow_nonref for bare scalars" );
 }
-is_deeply( [ JSON::SIMD->new->incr_parse('"a" [1]') ], [ 'a', [1] ] );
-is_deeply( [ JSON::SIMD->new->allow_nonref->incr_parse('1 ') ], [1] );
+is_deeply( [ JSON::SIMD->new->use_simdjson(0)->incr_parse('"a" [1]') ], [ 'a', [1] ] );
+is_deeply( [ JSON::SIMD->new->use_simdjson(0)->allow_nonref->incr_parse('1 ') ], [1] );
