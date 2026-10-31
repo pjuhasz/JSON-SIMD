@@ -3,7 +3,7 @@
 use strict;
 no warnings;
 use Test::More;
-BEGIN { plan tests => 747 };
+BEGIN { plan tests => 754 };
 
 use JSON::SIMD;
 
@@ -36,8 +36,8 @@ splitter +JSON::SIMD->new->use_simdjson(0)->allow_nonref (0), '  ["x\\"","\\u100
 splitter +JSON::SIMD->new->use_simdjson(0)->allow_nonref (0), '[ "x\\"","\\u1000\\\\n\\nx" , 1,{"\\\\ " :5 , "": " x"} ] ';
 splitter +JSON::SIMD->new->use_simdjson(0)                  , '"test"';
 splitter +JSON::SIMD->new->use_simdjson(0)                  , ' "5" ';
-splitter +JSON::SIMD->new->use_simdjson(0)                  , '-1e5';
-splitter +JSON::SIMD->new->use_simdjson(0)                  , ' 0.00E+00 ';
+splitter +JSON::SIMD->new->use_simdjson(0)->allow_nonref (1), '-1e5';
+splitter +JSON::SIMD->new->use_simdjson(0)->allow_nonref (1), ' 0.00E+00 ';
 
 {
    my $text = '[5],{"":1} , [ 1,2, 3], {"3":null}';
@@ -108,3 +108,8 @@ splitter +JSON::SIMD->new->use_simdjson(0)                  , ' 0.00E+00 ';
   ok( !eval { $json->incr_parse('[' . 'x' x 100); 1 }, 'void context' );
 }
 
+for my $bare (qw(1 -1.5 null true false)) {
+	ok( !eval { my @v = JSON::SIMD->new->use_simdjson(0)->incr_parse($bare); 1 }, "require explicit allow_nonref for bare scalars" );
+}
+is_deeply( [ JSON::SIMD->new->incr_parse('"a" [1]') ], [ 'a', [1] ] );
+is_deeply( [ JSON::SIMD->new->allow_nonref->incr_parse('1 ') ], [1] );

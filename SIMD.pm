@@ -1006,6 +1006,20 @@ I<cannot> be the beginning of a valid JSON text:
 In reality, hopwever, the parser might continue to read data until a
 length limit is exceeded or it finds a closing bracket.
 
+See also the section about RFC4627 VS. RFC7159 ("old" vs. "new" JSON),
+specifically the part about allowing a scalar in the top-level document
+introduces ambiguity: is the string C<12> one JSON document containing 
+the number 12, or two documents, each containing the numbers 1 and 2?
+This is especially problematic for the incremental parser, where the two
+digits in the above example may arrive to the parser in separate chunks.
+
+Therefore, to be safe, since version 1.08 JSON::SIMD requires an explicit
+C<allow_nonref(1)> setting for the incremental parser to accept a top-level
+number, "true", "false" or "null". 
+
+(Previous versions, as well as JSON::XS since version 4.00 have accepted
+such top-level values, because allow_nonref has become the implicit default).
+
 =head2 EXAMPLES
 
 Some examples will make all this clearer. First, a simple example that

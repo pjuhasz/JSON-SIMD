@@ -55,6 +55,7 @@
 #define F_USE_SIMDJSON      0x00010000UL
 #define F_CORE_BOOLS        0x00020000UL
 #define F_ENCODE_CORE_BOOLS 0x00040000UL
+#define F_NONREF_SET        0x00080000UL /* allow_nonref was called explicitly */
 
 #define F_PRETTY    F_INDENT | F_SPACE_BEFORE | F_SPACE_AFTER
 
@@ -2165,6 +2166,25 @@ decode_json (SV *string, JSON *json, STRLEN *offset_return, SV* path)
 /////////////////////////////////////////////////////////////////////////////
 // incremental parser
 
+/* a number or true/false/null at the start of the buffer: not self-delimiting, so its
+   end depends on how the input was chunked */
+static int
+incr_starts_bare_scalar (JSON *self)
+{
+  const char *p = SvPVX (self->incr_text);
+  for (;;)
+    {
+      while (*p == 0x20 || *p == 0x09 || *p == 0x0a || *p == 0x0d)
+        ++p;
+      if (*p != '#' || !(self->flags & F_RELAXED))
+        break;
+      while (*p && *p != 0x0a && *p != 0x0d)
+        ++p;
+    }
+  return *p == '-' || (*p >= '0' && *p <= '9')
+      || strnEQ (p, "true", 4) || strnEQ (p, "false", 5) || strnEQ (p, "null", 4);
+}
+
 static void
 incr_parse (JSON *self)
 {
@@ -2582,6 +2602,8 @@ void ascii (JSON *self, int enable = 1)
           self->flags &= ~F_USE_SIMDJSON;
         if (self->flags & F_USE_SIMDJSON && self->flags & F_RELAXED)
           self->flags &= ~F_USE_SIMDJSON;
+        if (ix == F_ALLOW_NONREF)
+          self->flags |= F_NONREF_SET;
 
         XPUSHs (ST (0));
 }
@@ -2783,6 +2805,9 @@ void incr_parse (JSON *self, SV *jsonstr = 0)
                       self->incr_pos++;
                     }
                 }
+
+              if (!(self->flags & F_NONREF_SET) && incr_starts_bare_scalar (self))
+                croak ("incremental parsing of a top-level number, true, false or null needs an explicit allow_nonref");
 
               PUTBACK; sv = decode_json (self->incr_text, self, &offset, 0); SPAGAIN;
               XPUSHs (sv);
