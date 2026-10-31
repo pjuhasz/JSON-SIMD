@@ -86,7 +86,7 @@ stuff). Or you can combine those features in whatever way you like.
 
 package JSON::SIMD;
 
-our $VERSION = '1.07';
+our $VERSION = '1.08';
 our $JSON_XS_VERSION = '4.04';
 our @ISA = qw(Exporter);
 
